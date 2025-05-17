@@ -1,0 +1,58 @@
+<?php
+
+namespace App\Policies;
+
+use App\Models\Site;
+use App\Models\User;
+use Illuminate\Auth\Access\HandlesAuthorization;
+
+class SitePolicy
+{
+    use HandlesAuthorization;
+
+    /**
+     * Determine whether the user can view any models.
+     */
+    public function viewAny(User $user): bool
+    {
+        return true;
+    }
+
+    /**
+     * Determine whether the user can view the model.
+     */
+    public function view(User $user, Site $site): bool
+    {
+        return $user->sites()->where('sites.id', $site->id)->exists();
+    }
+
+    /**
+     * Determine whether the user can create models.
+     */
+    public function create(User $user): bool
+    {
+        return true;
+    }
+
+    /**
+     * Determine whether the user can update the model.
+     */
+    public function update(User $user, Site $site): bool
+    {
+        return $user->sites()
+            ->where('sites.id', $site->id)
+            ->whereIn('role', ['owner', 'admin'])
+            ->exists();
+    }
+
+    /**
+     * Determine whether the user can delete the model.
+     */
+    public function delete(User $user, Site $site): bool
+    {
+        return $user->sites()
+            ->where('sites.id', $site->id)
+            ->where('role', 'owner')
+            ->exists();
+    }
+} 

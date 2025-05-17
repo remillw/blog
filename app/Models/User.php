@@ -6,11 +6,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -38,11 +41,42 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
-    protected function casts(): array
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+    ];
+
+    public function ownedSites(): HasMany
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        return $this->hasMany(Site::class);
+    }
+
+    public function sites(): BelongsToMany
+    {
+        return $this->belongsToMany(Site::class)
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class)
+            ->withPivot('role', 'permissions')
+            ->withTimestamps();
+    }
+
+    public function ownedTeams()
+    {
+        return $this->teams()->wherePivot('role', 'owner');
+    }
+
+    public function adminTeams()
+    {
+        return $this->teams()->wherePivot('role', 'admin');
+    }
+
+    public function memberTeams()
+    {
+        return $this->teams()->wherePivot('role', 'member');
     }
 }
