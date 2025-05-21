@@ -18,6 +18,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('articles', ArticleController::class);
     Route::post('/articles/upload-image', [ArticleController::class, 'uploadImage'])->name('articles.upload-image');
     Route::post('/articles/fetch-url-metadata', [ArticleController::class, 'fetchUrlMetadata'])->name('articles.fetch-url-metadata');
+    Route::get('/sites/{id}/colors', [SiteController::class, 'colors'])->name('sites.colors');
 });
 
 require __DIR__.'/settings.php';

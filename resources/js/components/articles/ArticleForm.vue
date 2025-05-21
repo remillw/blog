@@ -9,6 +9,35 @@
             </p>
         </div>
         <form @submit.prevent="submit" class="space-y-6">
+            <div class="mb-4">
+                <Label for="site_id">Site</Label>
+                <Combobox
+                  v-model="form.site_id"
+                  :options="siteOptions"
+                  placeholder="Sélectionner un site"
+                  @update:modelValue="fetchSiteColors"
+                />
+                <InputError :message="form.errors.site_id" />
+            </div>
+            <div v-if="siteColors.primary_color" class="mb-4">
+                <div class="flex space-x-4">
+                    <div>
+                        <span class="block text-xs">Primary</span>
+                        <span :style="{background: siteColors.primary_color, display: 'inline-block', width: '32px', height: '32px', borderRadius: '4px'}"></span>
+                        <span class="ml-2 text-xs">{{ siteColors.primary_color }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs">Secondary</span>
+                        <span :style="{background: siteColors.secondary_color, display: 'inline-block', width: '32px', height: '32px', borderRadius: '4px'}"></span>
+                        <span class="ml-2 text-xs">{{ siteColors.secondary_color }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs">Accent</span>
+                        <span :style="{background: siteColors.accent_color, display: 'inline-block', width: '32px', height: '32px', borderRadius: '4px'}"></span>
+                        <span class="ml-2 text-xs">{{ siteColors.accent_color }}</span>
+                    </div>
+                </div>
+            </div>
             <div class="grid grid-cols-2 gap-6">
                 <div class="space-y-4">
                     <div class="space-y-2">
@@ -137,7 +166,9 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useForm } from '@inertiajs/vue3';
-import { computed, watch } from 'vue';
+import { computed, watch, ref } from 'vue';
+import axios from 'axios';
+import { Combobox } from '@/components/ui/combobox';
 
 interface Category {
     id: number;
@@ -171,6 +202,7 @@ const props = defineProps<{
     article?: Article;
     categories: Category[];
     tags: Tag[];
+    sites: { id: number; name: string }[];
 }>();
 
 const emit = defineEmits(['close']);
@@ -190,6 +222,7 @@ const form = useForm({
     canonical_url: '',
     author_name: '',
     author_bio: '',
+    site_id: '' as string,
 });
 
 watch(
@@ -228,7 +261,7 @@ watch(
 );
 
 const submit = () => {
-    if (isEditing.value) {
+    if (isEditing.value && props.article) {
         form.put(route('articles.update', props.article.id), {
             onSuccess: () => emit('close'),
         });
@@ -252,4 +285,34 @@ const tagOptions = computed(() => {
         label: t.name,
     }));
 });
+
+const siteOptions = computed(() => {
+    if (!Array.isArray(props.sites)) return [];
+    return props.sites
+        .filter(s => s.id !== undefined && s.id !== null)
+        .map((s) => ({
+            value: String(s.id),
+            label: s.name
+        }));
+});
+
+const siteColors = ref({
+    primary_color: '',
+    secondary_color: '',
+    accent_color: '',
+});
+
+const fetchSiteColors = async (value: any) => {
+    const siteId = value ? String(value) : '';
+    if (!siteId) {
+        siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
+        return;
+    }
+    try {
+        const response = await axios.get(route('sites.colors', siteId));
+        siteColors.value = response.data;
+    } catch (e) {
+        siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
+    }
+};
 </script>

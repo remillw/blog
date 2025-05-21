@@ -203,4 +203,14 @@ class SiteController extends Controller
 
         return redirect()->back()->with('success', 'Site deleted successfully.');
     }
+
+    public function colors($id)
+    {
+        $site = Site::findOrFail($id);
+        return response()->json([
+            'primary_color' => $site->primary_color,
+            'secondary_color' => $site->secondary_color,
+            'accent_color' => $site->accent_color,
+        ]);
+    }
 }

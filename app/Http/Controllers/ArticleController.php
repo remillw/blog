@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Article;
 use App\Models\Category;
 use App\Models\Tag;
+use App\Models\Site;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -49,16 +50,14 @@ class ArticleController extends Controller
             ->orderBy('name')
             ->get();
 
-        $site = Auth::user()->currentSite;
+        $sites = Site::where('user_id', Auth::id())
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         return Inertia::render('Articles/Create', [
             'categories' => $categories,
             'tags' => $tags,
-            'site' => [
-                'primary_color' => $site->primary_color,
-                'secondary_color' => $site->secondary_color,
-                'accent_color' => $site->accent_color,
-            ],
+            'sites' => $sites,
         ]);
     }
 

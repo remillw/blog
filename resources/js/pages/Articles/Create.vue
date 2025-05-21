@@ -5,7 +5,13 @@
             <div class="mb-6 flex items-center justify-between">
                 <h2 class="text-xl leading-tight font-semibold text-gray-800">Create Article</h2>
             </div>
-            <ArticleForm :show="true" :categories="categories" :tags="tags" @close="goBack" />
+            <ArticleForm
+                :show="true"
+                :categories="categories"
+                :tags="tags"
+                :sites="sites"
+                @close="goBack"
+            />
         </div>
     </AppLayout>
 </template>
@@ -23,6 +29,7 @@ type Tag = { id: number; name: string };
 const page = usePage();
 const categories = page.props.categories as Category[];
 const tags = page.props.tags as Tag[];
+const sites = page.props.sites ?? [];
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: route('dashboard') },
