@@ -5,6 +5,8 @@ use Inertia\Inertia;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\ArticleController;
 use App\Http\Controllers\CategoryController;
+use Illuminate\Support\Facades\Auth;
+use App\Models\Site;
 
 Route::get('/', function () {
     return Inertia::render('Welcome');
@@ -21,6 +23,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/articles/upload-image', [ArticleController::class, 'uploadImage'])->name('articles.upload-image');
     Route::post('/articles/fetch-url-metadata', [ArticleController::class, 'fetchUrlMetadata'])->name('articles.fetch-url-metadata');
     Route::get('/sites/{id}/colors', [SiteController::class, 'colors'])->name('sites.colors');
+    Route::get('/sites/{id}/categories', [CategoryController::class, 'getBySite'])->name('sites.categories');
+    Route::get('/debug/categories/{siteId}', function($siteId) {
+        $user = Auth::user();
+        $site = Site::where('id', $siteId)->where('user_id', $user->id)->first();
+        return response()->json([
+            'user_id' => $user->id,
+            'site_found' => !!$site,
+            'site' => $site,
+            'categories' => $site ? $site->categories()->get(['categories.id', 'categories.name']) : []
+        ]);
+    })->name('debug.categories');
 });
 
 require __DIR__.'/settings.php';

@@ -123,6 +123,25 @@ class CategoryController extends Controller
     }
 
     /**
+     * Get categories for a specific site.
+     */
+    public function getBySite($siteId)
+    {
+        // Vérifier que le site appartient à l'utilisateur
+        $site = Site::where('id', $siteId)
+            ->where('user_id', Auth::id())
+            ->first();
+
+        if (!$site) {
+            return response()->json(['error' => 'Site not found or unauthorized'], 404);
+        }
+
+        $categories = $site->categories()->get(['categories.id', 'categories.name']);
+
+        return response()->json($categories);
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy(Category $category)

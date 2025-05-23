@@ -105,16 +105,69 @@
                     </div>
 
                     <div class="space-y-4">
-                        <div>
+                        <div class="space-y-2">
                             <Label for="categories">Categories</Label>
-                            <MultiSelect v-model="form.categories" :options="categoryOptions" placeholder="Select categories..." />
+                            <div v-if="!selectedSite" class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                                Sélectionnez d'abord un site pour voir les catégories disponibles
+                            </div>
+                            <Multiselect
+                                v-else
+                                v-model="selectedCategories"
+                                :options="categoryOptions"
+                                :multiple="true"
+                                :close-on-select="false"
+                                :clear-on-select="false"
+                                :preserve-search="true"
+                                label="label"
+                                track-by="value"
+                                placeholder="Sélectionnez les catégories..."
+                                class="custom-multiselect"
+                                :disabled="form.processing || availableCategories.length === 0"
+                            >
+                                <template #option="{ option }">
+                                    <div class="flex items-center gap-3 px-3 py-2 transition-colors duration-150 hover:bg-gray-50">
+                                        <div class="h-3 w-3 rounded-full bg-gray-400 shadow-sm"></div>
+                                        <span class="font-medium text-gray-700">{{ option.label }}</span>
+                                    </div>
+                                </template>
+                                <template #tag="{ option, remove }">
+                                    <span
+                                        class="group m-0.5 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200 hover:shadow-md"
+                                    >
+                                        <div class="h-1.5 w-1.5 rounded-full bg-gray-500"></div>
+                                        <span>{{ option.label }}</span>
+                                        <button
+                                            type="button"
+                                            @click="remove(option)"
+                                            class="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-200 text-gray-500 transition-colors duration-150 group-hover:scale-110 hover:bg-red-100 hover:text-red-600"
+                                        >
+                                            <svg class="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                                <path
+                                                    fill-rule="evenodd"
+                                                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                                    clip-rule="evenodd"
+                                                />
+                                            </svg>
+                                        </button>
+                                    </span>
+                                </template>
+                                <template #noResult>
+                                    <div class="px-4 py-3 text-center text-gray-500">
+                                        <div class="mb-2 text-2xl">🔍</div>
+                                        <div class="text-sm">Aucune catégorie trouvée</div>
+                                    </div>
+                                </template>
+                                <template #noOptions>
+                                    <div class="px-4 py-3 text-center text-gray-500">
+                                        <div class="mb-2 text-2xl">📝</div>
+                                        <div class="text-sm">Aucune catégorie disponible</div>
+                                    </div>
+                                </template>
+                            </Multiselect>
+                            <div v-if="selectedSite && availableCategories.length === 0" class="mt-1 text-sm text-gray-500">
+                                Aucune catégorie disponible pour ce site
+                            </div>
                             <InputError :message="form.errors.categories" class="mt-2" />
-                        </div>
-
-                        <div>
-                            <Label for="tags">Tags</Label>
-                            <MultiSelect v-model="form.tags" :options="tagOptions" placeholder="Select tags..." />
-                            <InputError :message="form.errors.tags" class="mt-2" />
                         </div>
                     </div>
                 </div>
@@ -167,7 +220,12 @@
             <div class="space-y-2">
                 <Label>Content</Label>
                 <div class="rounded-lg border">
-                    <EditorJS v-model="form.content" :disabled="form.processing" class="min-h-[400px]" />
+                    <EditorJS
+                        :initial-content="form.content"
+                        @update:content="(content) => (form.content = content)"
+                        :disabled="form.processing"
+                        class="min-h-[400px]"
+                    />
                 </div>
                 <InputError :message="form.errors.content" />
             </div>
@@ -198,22 +256,23 @@ import {
 } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useForm } from '@inertiajs/vue3';
 import axios from 'axios';
 import { Check, ChevronsUpDown } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import Multiselect from 'vue-multiselect';
+import 'vue-multiselect/dist/vue-multiselect.min.css';
 
 interface Category {
     id: number;
     name: string;
 }
 
-interface Tag {
-    id: number;
-    name: string;
+interface CategoryOption {
+    value: number;
+    label: string;
 }
 
 interface Article {
@@ -230,14 +289,13 @@ interface Article {
     canonical_url: string;
     author_name: string;
     author_bio: string;
+    site_id?: number;
     categories?: Category[];
-    tags?: Tag[];
 }
 
 const props = defineProps<{
     article?: Article;
     categories: Category[];
-    tags: Tag[];
     sites: { id: number; name: string }[];
 }>();
 
@@ -251,7 +309,6 @@ const form = useForm({
     status: 'draft',
     scheduled_at: undefined as string | undefined,
     categories: [] as number[],
-    tags: [] as number[],
     meta_title: '',
     meta_description: '',
     meta_keywords: '',
@@ -273,7 +330,7 @@ const isEditing = computed(() => !!props.article?.id);
 
 watch(
     () => props.article,
-    (newArticle) => {
+    async (newArticle) => {
         if (newArticle && 'id' in newArticle) {
             form.title = newArticle.title;
             form.excerpt = newArticle.excerpt;
@@ -288,9 +345,30 @@ watch(
             form.author_name = newArticle.author_name;
             form.author_bio = newArticle.author_bio;
             form.categories = newArticle.categories?.map((c) => c.id) || [];
-            form.tags = newArticle.tags?.map((t) => t.id) || [];
+
+            // Si l'article a un site_id, le précharger
+            if (newArticle.site_id) {
+                const siteOption = siteOptions.value.find((s) => s.value === String(newArticle.site_id));
+                if (siteOption) {
+                    selectedSite.value = siteOption;
+                    form.site_id = String(newArticle.site_id);
+                    await Promise.all([fetchSiteColors(newArticle.site_id), fetchSiteCategories(newArticle.site_id)]);
+
+                    // Précharger la catégorie sélectionnée si il y en a une
+                    if (newArticle.categories && newArticle.categories.length > 0) {
+                        selectedCategories.value = newArticle.categories.map((cat) => ({
+                            value: cat.id,
+                            label: cat.name,
+                        }));
+                    }
+                }
+            }
         } else {
             form.reset();
+            selectedSite.value = null;
+            selectedCategories.value = [];
+            availableCategories.value = [];
+            siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
         }
     },
     { immediate: true },
@@ -308,17 +386,19 @@ const submit = () => {
     }
 };
 
-const categoryOptions = computed(() => {
-    return props.categories.map((c) => ({
-        value: c.id,
-        label: c.name,
-    }));
+const siteColors = ref({
+    primary_color: '',
+    secondary_color: '',
+    accent_color: '',
 });
 
-const tagOptions = computed(() => {
-    return props.tags.map((t) => ({
-        value: t.id,
-        label: t.name,
+const selectedSite = ref<{ value: string; label: string } | null>(null);
+const availableCategories = ref<Category[]>([]);
+
+const categoryOptions = computed(() => {
+    return availableCategories.value.map((c) => ({
+        value: c.id,
+        label: c.name,
     }));
 });
 
@@ -335,18 +415,16 @@ const siteOptions = computed(() => {
     return options;
 });
 
-const siteColors = ref({
-    primary_color: '',
-    secondary_color: '',
-    accent_color: '',
-});
-
-const selectedSite = ref(null);
-
 const onSiteSelect = async (option: any) => {
     selectedSite.value = option;
     form.site_id = String(option.value);
-    await fetchSiteColors(option.value);
+
+    // Reset categories when changing site
+    form.categories = [];
+    availableCategories.value = [];
+    selectedCategories.value = [];
+
+    await Promise.all([fetchSiteColors(option.value), fetchSiteCategories(option.value)]);
 };
 
 const fetchSiteColors = async (value: any) => {
@@ -363,4 +441,181 @@ const fetchSiteColors = async (value: any) => {
         siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
     }
 };
+
+const fetchSiteCategories = async (siteId: any) => {
+    console.log('Fetching categories for site:', siteId);
+
+    if (!siteId) {
+        console.log('No siteId provided, clearing categories');
+        availableCategories.value = [];
+        return;
+    }
+
+    try {
+        const url = `/sites/${siteId}/categories`;
+        console.log('Making request to:', url);
+        const response = await axios.get(url);
+        console.log('Categories response:', response.data);
+        availableCategories.value = response.data;
+    } catch (error: any) {
+        console.error('Error fetching site categories:', error);
+        if (error.response) {
+            console.error('Error response:', error.response.data);
+            console.error('Error status:', error.response.status);
+        }
+        availableCategories.value = [];
+    }
+};
+
+const selectedCategories = ref<CategoryOption[]>([]);
+
+// Watch pour synchroniser les changements du multiselect avec le form
+watch(
+    selectedCategories,
+    (newCategories) => {
+        form.categories = newCategories.map((cat) => cat.value);
+    },
+    { deep: true },
+);
 </script>
+
+<style>
+.custom-multiselect .multiselect__tags {
+    min-height: 48px;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    background: #ffffff;
+    padding: 8px 12px;
+    font-size: 15px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.custom-multiselect .multiselect__tags:hover {
+    border-color: #9ca3af;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.custom-multiselect .multiselect__tags:focus-within {
+    border-color: #6b7280;
+    box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
+    transform: translateY(-1px);
+}
+
+.custom-multiselect .multiselect__input {
+    border: none;
+    background: transparent;
+    font-size: 15px;
+    padding: 4px 0;
+}
+
+.custom-multiselect .multiselect__input:focus {
+    outline: none;
+}
+
+.custom-multiselect .multiselect__placeholder {
+    color: #9ca3af;
+    padding-top: 4px;
+    margin-bottom: 8px;
+    font-size: 15px;
+}
+
+.custom-multiselect .multiselect__content-wrapper {
+    border: none;
+    border-radius: 8px;
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    background: white;
+    margin-top: 4px;
+    overflow: hidden;
+    animation: dropdownAppear 0.15s ease-out;
+}
+
+.custom-multiselect .multiselect__content {
+    max-height: 240px;
+}
+
+.custom-multiselect .multiselect__option {
+    padding: 0;
+    border-bottom: 1px solid #f3f4f6;
+    transition: all 0.15s ease;
+}
+
+.custom-multiselect .multiselect__option:last-child {
+    border-bottom: none;
+}
+
+.custom-multiselect .multiselect__option--highlight {
+    background: #f9fafb;
+    color: #374151;
+}
+
+.custom-multiselect .multiselect__option--selected {
+    background: #f3f4f6;
+    color: #1f2937;
+    font-weight: 500;
+}
+
+.custom-multiselect .multiselect__option--selected::after {
+    content: '✓';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #059669;
+    font-weight: bold;
+}
+
+.custom-multiselect .multiselect__tag {
+    background: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    color: inherit !important;
+    font-size: inherit !important;
+    font-weight: inherit !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    animation: tagAppear 0.2s ease-out;
+}
+
+.custom-multiselect .multiselect__tag-icon {
+    display: none !important;
+}
+
+.custom-multiselect .multiselect__spinner {
+    background: #6b7280;
+    border-radius: 50%;
+    width: 3px;
+    height: 3px;
+}
+
+.custom-multiselect .multiselect__loading {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(2px);
+}
+
+/* Animation pour les tags */
+@keyframes tagAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Transition douce pour le contenu */
+@keyframes dropdownAppear {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
