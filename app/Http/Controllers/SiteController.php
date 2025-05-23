@@ -206,7 +206,10 @@ class SiteController extends Controller
 
     public function colors($id)
     {
-        $site = Site::findOrFail($id);
+        $site = Site::where('id', $id)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+            
         return response()->json([
             'primary_color' => $site->primary_color,
             'secondary_color' => $site->secondary_color,

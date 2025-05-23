@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\ArticleController;
+use App\Http\Controllers\CategoryController;
 
 Route::get('/', function () {
     return Inertia::render('Welcome');
@@ -16,6 +17,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('sites', SiteController::class);
     Route::resource('articles', ArticleController::class);
+    Route::resource('categories', CategoryController::class);
     Route::post('/articles/upload-image', [ArticleController::class, 'uploadImage'])->name('articles.upload-image');
     Route::post('/articles/fetch-url-metadata', [ArticleController::class, 'fetchUrlMetadata'])->name('articles.fetch-url-metadata');
     Route::get('/sites/{id}/colors', [SiteController::class, 'colors'])->name('sites.colors');

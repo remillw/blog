@@ -1,40 +1,65 @@
 <template>
     <div class="mx-auto max-w-4xl">
-        <div class="mb-6">
-            <h2 class="text-2xl font-semibold">
-                {{ isEditing ? 'Edit Article' : 'Create Article' }}
-            </h2>
-            <p class="text-muted-foreground">
-                {{ isEditing ? 'Update your article content and settings.' : 'Create a new article with rich content.' }}
-            </p>
-        </div>
         <form @submit.prevent="submit" class="space-y-6">
-            <div class="mb-4">
+            <div class="space-y-2">
                 <Label for="site_id">Site</Label>
-                <Combobox
-                  v-model="form.site_id"
-                  :options="siteOptions"
-                  placeholder="Sélectionner un site"
-                  @update:modelValue="fetchSiteColors"
-                />
+                <Combobox by="label" v-model="selectedSite" @update:model-value="onSiteSelect">
+                    <ComboboxAnchor as-child>
+                        <ComboboxTrigger
+                            class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus:ring-ring flex h-10 w-full items-center justify-between rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1"
+                        >
+                            <ComboboxInput
+                                :display-value="(val) => val?.label ?? ''"
+                                placeholder="Sélectionner un site..."
+                                class="placeholder:text-muted-foreground flex-1 border-none bg-transparent outline-none"
+                            />
+                            <ChevronsUpDown class="h-4 w-4 opacity-50" />
+                        </ComboboxTrigger>
+                    </ComboboxAnchor>
+
+                    <ComboboxList
+                        class="!right-auto !left-0 z-50 w-full min-w-[var(--radix-popper-anchor-width)]"
+                        data-side="bottom"
+                        data-align="start"
+                    >
+                        <ComboboxEmpty> Aucun site trouvé. </ComboboxEmpty>
+
+                        <ComboboxGroup>
+                            <ComboboxItem v-for="option in siteOptions" :key="option.value" :value="option" @select="() => onSiteSelect(option)">
+                                {{ option.label }}
+
+                                <ComboboxItemIndicator>
+                                    <Check class="ml-auto h-4 w-4" />
+                                </ComboboxItemIndicator>
+                            </ComboboxItem>
+                        </ComboboxGroup>
+                    </ComboboxList>
+                </Combobox>
                 <InputError :message="form.errors.site_id" />
             </div>
-            <div v-if="siteColors.primary_color" class="mb-4">
-                <div class="flex space-x-4">
-                    <div>
-                        <span class="block text-xs">Primary</span>
-                        <span :style="{background: siteColors.primary_color, display: 'inline-block', width: '32px', height: '32px', borderRadius: '4px'}"></span>
-                        <span class="ml-2 text-xs">{{ siteColors.primary_color }}</span>
+            <div v-if="siteColors.primary_color" class="space-y-2">
+                <Label class="text-sm font-medium">Couleurs du site</Label>
+                <div class="bg-muted/30 flex items-center gap-6 rounded-lg border p-4">
+                    <div class="flex items-center gap-2">
+                        <div class="h-8 w-8 rounded-lg border shadow-sm" :style="{ backgroundColor: siteColors.primary_color }"></div>
+                        <div>
+                            <p class="text-muted-foreground text-xs font-medium">Primary</p>
+                            <p class="font-mono text-xs">{{ siteColors.primary_color }}</p>
+                        </div>
                     </div>
-                    <div>
-                        <span class="block text-xs">Secondary</span>
-                        <span :style="{background: siteColors.secondary_color, display: 'inline-block', width: '32px', height: '32px', borderRadius: '4px'}"></span>
-                        <span class="ml-2 text-xs">{{ siteColors.secondary_color }}</span>
+                    <div class="flex items-center gap-2">
+                        <div class="h-8 w-8 rounded-lg border shadow-sm" :style="{ backgroundColor: siteColors.secondary_color }"></div>
+                        <div>
+                            <p class="text-muted-foreground text-xs font-medium">Secondary</p>
+                            <p class="font-mono text-xs">{{ siteColors.secondary_color }}</p>
+                        </div>
                     </div>
-                    <div>
-                        <span class="block text-xs">Accent</span>
-                        <span :style="{background: siteColors.accent_color, display: 'inline-block', width: '32px', height: '32px', borderRadius: '4px'}"></span>
-                        <span class="ml-2 text-xs">{{ siteColors.accent_color }}</span>
+                    <div class="flex items-center gap-2">
+                        <div class="h-8 w-8 rounded-lg border shadow-sm" :style="{ backgroundColor: siteColors.accent_color }"></div>
+                        <div>
+                            <p class="text-muted-foreground text-xs font-medium">Accent</p>
+                            <p class="font-mono text-xs">{{ siteColors.accent_color }}</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -160,15 +185,26 @@
 import EditorJS from '@/components/Editor/EditorJS.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
+import {
+    Combobox,
+    ComboboxAnchor,
+    ComboboxEmpty,
+    ComboboxGroup,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxItemIndicator,
+    ComboboxList,
+    ComboboxTrigger,
+} from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useForm } from '@inertiajs/vue3';
-import { computed, watch, ref } from 'vue';
 import axios from 'axios';
-import { Combobox } from '@/components/ui/combobox';
+import { Check, ChevronsUpDown } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 
 interface Category {
     id: number;
@@ -287,13 +323,16 @@ const tagOptions = computed(() => {
 });
 
 const siteOptions = computed(() => {
-    if (!Array.isArray(props.sites)) return [];
-    return props.sites
-        .filter(s => s.id !== undefined && s.id !== null)
+    if (!Array.isArray(props.sites)) {
+        return [];
+    }
+    const options = props.sites
+        .filter((s) => s.id !== undefined && s.id !== null)
         .map((s) => ({
             value: String(s.id),
-            label: s.name
+            label: s.name,
         }));
+    return options;
 });
 
 const siteColors = ref({
@@ -301,6 +340,14 @@ const siteColors = ref({
     secondary_color: '',
     accent_color: '',
 });
+
+const selectedSite = ref(null);
+
+const onSiteSelect = async (option: any) => {
+    selectedSite.value = option;
+    form.site_id = String(option.value);
+    await fetchSiteColors(option.value);
+};
 
 const fetchSiteColors = async (value: any) => {
     const siteId = value ? String(value) : '';
@@ -311,7 +358,8 @@ const fetchSiteColors = async (value: any) => {
     try {
         const response = await axios.get(route('sites.colors', siteId));
         siteColors.value = response.data;
-    } catch (e) {
+    } catch (error) {
+        console.error('Error fetching site colors:', error);
         siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
     }
 };

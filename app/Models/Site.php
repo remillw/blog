@@ -60,4 +60,9 @@ class Site extends Model
             ->withPivot('is_default')
             ->withTimestamps();
     }
+
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class)->withTimestamps();
+    }
 }

@@ -5,24 +5,29 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, FileText, Folder, Globe, LayoutDashboard, LayoutGrid } from 'lucide-vue-next';
+import { BookOpen, FileText, Folder, Globe, LayoutGrid, Tags } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: route('dashboard'),
+        href: '/dashboard',
         icon: LayoutGrid,
     },
     {
         title: 'Sites',
-        href: route('sites.index'),
+        href: '/sites',
         icon: Globe,
     },
     {
         title: 'Articles',
-        href: route('articles.index'),
+        href: '/articles',
         icon: FileText,
+    },
+    {
+        title: 'Categories',
+        href: '/categories',
+        icon: Tags,
     },
 ];
 
@@ -46,7 +51,7 @@ const footerNavItems: NavItem[] = [
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="route('dashboard')">
+                        <Link href="/dashboard">
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>

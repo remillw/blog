@@ -67,33 +67,30 @@ class ArticleController extends Controller
             'title' => 'required|string|max:255',
             'content' => 'required|string',
             'excerpt' => 'nullable|string',
-            'featured_image' => 'nullable|string',
+            'featured_image_url' => 'nullable|string',
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string',
-            'meta_keywords' => 'nullable|array',
+            'meta_keywords' => 'nullable|string',
             'canonical_url' => 'nullable|url',
             'status' => 'required|in:draft,published,scheduled',
             'published_at' => 'nullable|date',
             'scheduled_at' => 'nullable|date',
-            'is_featured' => 'boolean',
             'author_name' => 'nullable|string|max:255',
             'author_bio' => 'nullable|string',
-            'og_title' => 'nullable|string|max:255',
-            'og_description' => 'nullable|string',
-            'og_image' => 'nullable|string',
-            'twitter_title' => 'nullable|string|max:255',
-            'twitter_description' => 'nullable|string',
-            'twitter_image' => 'nullable|string',
-            'schema_markup' => 'nullable|array',
             'categories' => 'nullable|array',
             'categories.*' => 'exists:categories,id',
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
+            'site_id' => 'required|exists:sites,id',
         ]);
+
+        // Vérifier que le site appartient à l'utilisateur connecté
+        $site = Site::where('id', $validated['site_id'])
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
 
         $article = Article::create([
             ...$validated,
-            'site_id' => Auth::user()->current_site_id,
             'user_id' => Auth::id(),
         ]);
 
@@ -141,29 +138,27 @@ class ArticleController extends Controller
             'title' => 'required|string|max:255',
             'content' => 'required|string',
             'excerpt' => 'nullable|string',
-            'featured_image' => 'nullable|string',
+            'featured_image_url' => 'nullable|string',
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string',
-            'meta_keywords' => 'nullable|array',
+            'meta_keywords' => 'nullable|string',
             'canonical_url' => 'nullable|url',
             'status' => 'required|in:draft,published,scheduled',
             'published_at' => 'nullable|date',
             'scheduled_at' => 'nullable|date',
-            'is_featured' => 'boolean',
             'author_name' => 'nullable|string|max:255',
             'author_bio' => 'nullable|string',
-            'og_title' => 'nullable|string|max:255',
-            'og_description' => 'nullable|string',
-            'og_image' => 'nullable|string',
-            'twitter_title' => 'nullable|string|max:255',
-            'twitter_description' => 'nullable|string',
-            'twitter_image' => 'nullable|string',
-            'schema_markup' => 'nullable|array',
             'categories' => 'nullable|array',
             'categories.*' => 'exists:categories,id',
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
+            'site_id' => 'required|exists:sites,id',
         ]);
+
+        // Vérifier que le site appartient à l'utilisateur connecté
+        $site = Site::where('id', $validated['site_id'])
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
 
         $article->update($validated);
 

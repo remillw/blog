@@ -13,7 +13,6 @@ class Category extends Model
     use HasFactory;
 
     protected $fillable = [
-        'site_id',
         'name',
         'slug',
         'description',
@@ -32,9 +31,9 @@ class Category extends Model
         });
     }
 
-    public function site(): BelongsTo
+    public function sites(): BelongsToMany
     {
-        return $this->belongsTo(Site::class);
+        return $this->belongsToMany(Site::class)->withTimestamps();
     }
 
     public function parent(): BelongsTo

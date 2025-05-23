@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 
 const props = withDefaults(defineProps<ComboboxContentProps & { class?: HTMLAttributes['class'] }>(), {
   position: 'popper',
-  align: 'center',
+  align: 'start',
   sideOffset: 4,
 })
 const emits = defineEmits<ComboboxContentEmits>()

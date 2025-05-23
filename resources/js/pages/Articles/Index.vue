@@ -6,7 +6,7 @@
             <div class="mb-6 flex items-center justify-between">
                 <h2 class="text-xl leading-tight font-semibold text-gray-800">Articles</h2>
                 <Button as-child variant="outline">
-                    <Link :href="route('articles.create')">
+                    <Link href="/articles/create">
                         <PlusIcon class="mr-2 h-4 w-4" />
                         New Article
                     </Link>
@@ -19,7 +19,7 @@
                             <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">All</SelectItem>
+                            <SelectItem value="all">All</SelectItem>
                             <SelectItem value="draft">Draft</SelectItem>
                             <SelectItem value="published">Published</SelectItem>
                             <SelectItem value="scheduled">Scheduled</SelectItem>
@@ -82,7 +82,7 @@
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem>
-                                        <Link :href="route('articles.edit', article.id)" class="flex items-center">
+                                        <Link :href="`/articles/${article.id}/edit`" class="flex items-center">
                                             <PencilIcon class="mr-2 h-4 w-4" />
                                             Edit
                                         </Link>
@@ -176,28 +176,28 @@ defineProps<{
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Dashboard',
-        href: route('dashboard'),
+        href: '/dashboard',
     },
     {
         title: 'Articles',
-        href: route('articles.index'),
+        href: '/articles',
     },
 ];
 
 const filters = ref({
-    status: '',
+    status: 'all',
     search: '',
 });
 
 const publishArticle = (article: Article) => {
-    router.put(route('articles.update', article.id), {
+    router.put(`/articles/${article.id}`, {
         status: 'published',
         published_at: new Date().toISOString(),
     });
 };
 
 const unpublishArticle = (article: Article) => {
-    router.put(route('articles.update', article.id), {
+    router.put(`/articles/${article.id}`, {
         status: 'draft',
         published_at: null,
     });
@@ -205,7 +205,7 @@ const unpublishArticle = (article: Article) => {
 
 const deleteArticle = (article: Article) => {
     if (confirm('Are you sure you want to delete this article?')) {
-        router.delete(route('articles.destroy', article.id));
+        router.delete(`/articles/${article.id}`);
     }
 };
 
