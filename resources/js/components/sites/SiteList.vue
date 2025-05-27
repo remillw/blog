@@ -44,7 +44,7 @@
                                     <DropdownMenuContent align="end">
                                         <DropdownMenuItem @click="openForm(site)"> Edit </DropdownMenuItem>
                                         <DropdownMenuItem asChild class="text-red-600">
-                                            <Link :href="route('sites.destroy', site.id)" method="delete" as="button"> Delete </Link>
+                                            <Link :href="siteRoutes.destroy(site.id)" method="delete" as="button"> Delete </Link>
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
@@ -64,6 +64,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useRoutes } from '@/composables/useRoutes';
 import { Link } from '@inertiajs/vue3';
 import { MoreHorizontal } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
@@ -79,6 +80,8 @@ const props = defineProps({
         default: null,
     },
 });
+
+const { siteRoutes } = useRoutes();
 
 const showForm = ref(false);
 const selectedSite = ref(null);

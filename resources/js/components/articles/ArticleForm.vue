@@ -110,60 +110,14 @@
                             <div v-if="!selectedSite" class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
                                 Sélectionnez d'abord un site pour voir les catégories disponibles
                             </div>
-                            <Multiselect
+                            <MultiSelect
                                 v-else
-                                v-model="selectedCategories"
+                                v-model="selectedCategoryValues"
                                 :options="categoryOptions"
-                                :multiple="true"
-                                :close-on-select="false"
-                                :clear-on-select="false"
-                                :preserve-search="true"
-                                label="label"
-                                track-by="value"
                                 placeholder="Sélectionnez les catégories..."
-                                class="custom-multiselect"
                                 :disabled="form.processing || availableCategories.length === 0"
-                            >
-                                <template #option="{ option }">
-                                    <div class="flex items-center gap-3 px-3 py-2 transition-colors duration-150 hover:bg-gray-50">
-                                        <div class="h-3 w-3 rounded-full bg-gray-400 shadow-sm"></div>
-                                        <span class="font-medium text-gray-700">{{ option.label }}</span>
-                                    </div>
-                                </template>
-                                <template #tag="{ option, remove }">
-                                    <span
-                                        class="group m-0.5 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200 hover:shadow-md"
-                                    >
-                                        <div class="h-1.5 w-1.5 rounded-full bg-gray-500"></div>
-                                        <span>{{ option.label }}</span>
-                                        <button
-                                            type="button"
-                                            @click="remove(option)"
-                                            class="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-200 text-gray-500 transition-colors duration-150 group-hover:scale-110 hover:bg-red-100 hover:text-red-600"
-                                        >
-                                            <svg class="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
-                                                <path
-                                                    fill-rule="evenodd"
-                                                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                                                    clip-rule="evenodd"
-                                                />
-                                            </svg>
-                                        </button>
-                                    </span>
-                                </template>
-                                <template #noResult>
-                                    <div class="px-4 py-3 text-center text-gray-500">
-                                        <div class="mb-2 text-2xl">🔍</div>
-                                        <div class="text-sm">Aucune catégorie trouvée</div>
-                                    </div>
-                                </template>
-                                <template #noOptions>
-                                    <div class="px-4 py-3 text-center text-gray-500">
-                                        <div class="mb-2 text-2xl">📝</div>
-                                        <div class="text-sm">Aucune catégorie disponible</div>
-                                    </div>
-                                </template>
-                            </Multiselect>
+                                class="w-full"
+                            />
                             <div v-if="selectedSite && availableCategories.length === 0" class="mt-1 text-sm text-gray-500">
                                 Aucune catégorie disponible pour ce site
                             </div>
@@ -258,12 +212,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import MultiSelect from '@/components/ui/MultiSelect.vue';
+import { useRoutes } from '@/composables/useRoutes';
 import { useForm } from '@inertiajs/vue3';
 import axios from 'axios';
 import { Check, ChevronsUpDown } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
-import Multiselect from 'vue-multiselect';
-import 'vue-multiselect/dist/vue-multiselect.min.css';
 
 interface Category {
     id: number;
@@ -271,7 +225,7 @@ interface Category {
 }
 
 interface CategoryOption {
-    value: number;
+    value: string;
     label: string;
 }
 
@@ -300,6 +254,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits(['close']);
+
+const { articleRoutes, siteRoutes } = useRoutes();
 
 const form = useForm({
     title: '',
@@ -356,17 +312,14 @@ watch(
 
                     // Précharger la catégorie sélectionnée si il y en a une
                     if (newArticle.categories && newArticle.categories.length > 0) {
-                        selectedCategories.value = newArticle.categories.map((cat) => ({
-                            value: cat.id,
-                            label: cat.name,
-                        }));
+                        selectedCategoryValues.value = newArticle.categories.map((cat) => cat.id.toString());
                     }
                 }
             }
         } else {
             form.reset();
             selectedSite.value = null;
-            selectedCategories.value = [];
+            selectedCategoryValues.value = [];
             availableCategories.value = [];
             siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
         }
@@ -375,12 +328,12 @@ watch(
 );
 
 const submit = () => {
-    if (isEditing.value && props.article) {
-        form.put(route('articles.update', props.article.id), {
+    if (isEditing.value && props.article && props.article.id) {
+        form.put(articleRoutes.update(props.article.id), {
             onSuccess: () => emit('close'),
         });
     } else {
-        form.post(route('articles.store'), {
+        form.post(articleRoutes.store(), {
             onSuccess: () => emit('close'),
         });
     }
@@ -397,7 +350,7 @@ const availableCategories = ref<Category[]>([]);
 
 const categoryOptions = computed(() => {
     return availableCategories.value.map((c) => ({
-        value: c.id,
+        value: c.id.toString(),
         label: c.name,
     }));
 });
@@ -422,7 +375,7 @@ const onSiteSelect = async (option: any) => {
     // Reset categories when changing site
     form.categories = [];
     availableCategories.value = [];
-    selectedCategories.value = [];
+    selectedCategoryValues.value = [];
 
     await Promise.all([fetchSiteColors(option.value), fetchSiteCategories(option.value)]);
 };
@@ -434,7 +387,7 @@ const fetchSiteColors = async (value: any) => {
         return;
     }
     try {
-        const response = await axios.get(route('sites.colors', siteId));
+        const response = await axios.get(siteRoutes.show(siteId) + '/colors');
         siteColors.value = response.data;
     } catch (error) {
         console.error('Error fetching site colors:', error);
@@ -452,7 +405,7 @@ const fetchSiteCategories = async (siteId: any) => {
     }
 
     try {
-        const url = `/sites/${siteId}/categories`;
+        const url = siteRoutes.show(siteId) + '/categories';
         console.log('Making request to:', url);
         const response = await axios.get(url);
         console.log('Categories response:', response.data);
@@ -467,13 +420,13 @@ const fetchSiteCategories = async (siteId: any) => {
     }
 };
 
-const selectedCategories = ref<CategoryOption[]>([]);
+const selectedCategoryValues = ref<string[]>([]);
 
 // Watch pour synchroniser les changements du multiselect avec le form
 watch(
-    selectedCategories,
+    selectedCategoryValues,
     (newCategories) => {
-        form.categories = newCategories.map((cat) => cat.value);
+        form.categories = newCategories.map((value) => Number(value));
     },
     { deep: true },
 );

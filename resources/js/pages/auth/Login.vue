@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useRoutes } from '@/composables/useRoutes';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
@@ -14,6 +15,8 @@ defineProps<{
     canResetPassword: boolean;
 }>();
 
+const { authRoutes } = useRoutes();
+
 const form = useForm({
     email: '',
     password: '',
@@ -21,7 +24,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post(route('login'), {
+    form.post(authRoutes.login(), {
         onFinish: () => form.reset('password'),
     });
 };
@@ -55,7 +58,7 @@ const submit = () => {
                 <div class="grid gap-2">
                     <div class="flex items-center justify-between">
                         <Label for="password">Password</Label>
-                        <TextLink v-if="canResetPassword" :href="route('password.request')" class="text-sm" :tabindex="5">
+                        <TextLink v-if="canResetPassword" :href="authRoutes.passwordRequest()" class="text-sm" :tabindex="5">
                             Forgot password?
                         </TextLink>
                     </div>
@@ -86,7 +89,7 @@ const submit = () => {
 
             <div class="text-center text-sm text-muted-foreground">
                 Don't have an account?
-                <TextLink :href="route('register')" :tabindex="5">Sign up</TextLink>
+                <TextLink :href="authRoutes.register()" :tabindex="5">Sign up</TextLink>
             </div>
         </form>
     </AuthBase>

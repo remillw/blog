@@ -6,7 +6,7 @@
             <div class="mb-6 flex items-center justify-between">
                 <h2 class="text-xl leading-tight font-semibold text-gray-800">Articles</h2>
                 <Button as-child variant="outline">
-                    <Link href="/articles/create">
+                    <Link :href="articleRoutes.create()">
                         <PlusIcon class="mr-2 h-4 w-4" />
                         New Article
                     </Link>
@@ -82,7 +82,7 @@
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem>
-                                        <Link :href="`/articles/${article.id}/edit`" class="flex items-center">
+                                        <Link :href="articleRoutes.edit(article.id)" class="flex items-center">
                                             <PencilIcon class="mr-2 h-4 w-4" />
                                             Edit
                                         </Link>
@@ -122,6 +122,7 @@ import { Input } from '@/components/ui/input';
 import { Pagination } from '@/components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useRoutes } from '@/composables/useRoutes';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
@@ -173,14 +174,16 @@ defineProps<{
     }>;
 }>();
 
+const { appRoutes, articleRoutes } = useRoutes();
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Dashboard',
-        href: '/dashboard',
+        href: appRoutes.dashboard(),
     },
     {
         title: 'Articles',
-        href: '/articles',
+        href: articleRoutes.index(),
     },
 ];
 
@@ -190,14 +193,14 @@ const filters = ref({
 });
 
 const publishArticle = (article: Article) => {
-    router.put(`/articles/${article.id}`, {
+    router.put(articleRoutes.update(article.id), {
         status: 'published',
         published_at: new Date().toISOString(),
     });
 };
 
 const unpublishArticle = (article: Article) => {
-    router.put(`/articles/${article.id}`, {
+    router.put(articleRoutes.update(article.id), {
         status: 'draft',
         published_at: null,
     });
@@ -205,7 +208,7 @@ const unpublishArticle = (article: Article) => {
 
 const deleteArticle = (article: Article) => {
     if (confirm('Are you sure you want to delete this article?')) {
-        router.delete(`/articles/${article.id}`);
+        router.delete(articleRoutes.destroy(article.id));
     }
 };
 

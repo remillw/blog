@@ -4,6 +4,7 @@ import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useRoutes } from '@/composables/useRoutes';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
@@ -12,12 +13,14 @@ defineProps<{
     status?: string;
 }>();
 
+const { authRoutes } = useRoutes();
+
 const form = useForm({
     email: '',
 });
 
 const submit = () => {
-    form.post(route('password.email'));
+    form.post(authRoutes.passwordEmail());
 };
 </script>
 
@@ -47,7 +50,7 @@ const submit = () => {
 
             <div class="space-x-1 text-center text-sm text-muted-foreground">
                 <span>Or, return to</span>
-                <TextLink :href="route('login')">log in</TextLink>
+                <TextLink :href="authRoutes.login()">log in</TextLink>
             </div>
         </div>
     </AuthLayout>

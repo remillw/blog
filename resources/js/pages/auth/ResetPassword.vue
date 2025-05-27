@@ -3,6 +3,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useRoutes } from '@/composables/useRoutes';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
@@ -14,6 +15,8 @@ interface Props {
 
 const props = defineProps<Props>();
 
+const { authRoutes } = useRoutes();
+
 const form = useForm({
     token: props.token,
     email: props.email,
@@ -22,7 +25,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post(route('password.store'), {
+    form.post(authRoutes.passwordStore(), {
         onFinish: () => {
             form.reset('password', 'password_confirmation');
         },

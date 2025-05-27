@@ -90,6 +90,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useRoutes } from '@/composables/useRoutes';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
@@ -113,14 +114,16 @@ const { categories, availableSites } = defineProps<{
     availableSites: Site[];
 }>();
 
+const { appRoutes, categoryRoutes } = useRoutes();
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Dashboard',
-        href: '/dashboard',
+        href: appRoutes.dashboard(),
     },
     {
         title: 'Categories',
-        href: '/categories',
+        href: categoryRoutes.index(),
     },
 ];
 
@@ -152,7 +155,7 @@ const closeForm = () => {
 
 const deleteCategory = (category: Category) => {
     if (confirm('Are you sure you want to delete this category?')) {
-        router.delete(`/categories/${category.id}`);
+        router.delete(categoryRoutes.destroy(category.id));
     }
 };
 

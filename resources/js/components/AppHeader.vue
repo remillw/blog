@@ -16,6 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { getInitials } from '@/composables/useInitials';
+import { useRoutes } from '@/composables/useRoutes';
 import type { BreadcrumbItem, NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-vue-next';
@@ -31,6 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const page = usePage();
 const auth = computed(() => page.props.auth);
+const { appRoutes } = useRoutes();
 
 const isCurrentRoute = computed(() => (url: string) => page.url === url);
 
@@ -41,7 +43,7 @@ const activeItemStyles = computed(
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: '/dashboard',
+        href: appRoutes.dashboard(),
         icon: LayoutGrid,
     },
 ];
@@ -108,7 +110,7 @@ const rightNavItems: NavItem[] = [
                     </Sheet>
                 </div>
 
-                <Link href="/dashboard" class="flex items-center gap-x-2">
+                <Link :href="appRoutes.dashboard()" class="flex items-center gap-x-2">
                     <AppLogo />
                 </Link>
 

@@ -13,6 +13,7 @@
 <script setup lang="ts">
 import ArticleForm from '@/components/articles/ArticleForm.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useRoutes } from '@/composables/useRoutes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
 
@@ -21,18 +22,20 @@ type Category = { id: number; name: string };
 type Tag = { id: number; name: string };
 type Site = { id: number; name: string };
 
+const { appRoutes, articleRoutes } = useRoutes();
+
 const page = usePage();
 const categories = page.props.categories as Category[];
 const tags = page.props.tags as Tag[];
 const sites = (page.props.sites as Site[]) ?? [];
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard', href: '/dashboard' },
-    { title: 'Articles', href: '/articles' },
-    { title: 'Create', href: '/articles/create' },
+    { title: 'Dashboard', href: appRoutes.dashboard() },
+    { title: 'Articles', href: articleRoutes.index() },
+    { title: 'Create', href: articleRoutes.create() },
 ];
 
 function goBack() {
-    router.visit('/articles');
+    router.visit(articleRoutes.index());
 }
 </script>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { useRoutes } from '@/composables/useRoutes';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 
@@ -8,6 +9,7 @@ defineProps<{
 }>();
 
 const page = usePage<SharedData>();
+const { isCurrentRoute } = useRoutes();
 </script>
 
 <template>

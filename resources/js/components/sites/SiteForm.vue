@@ -93,32 +93,13 @@
 
                 <div class="space-y-2">
                     <Label>Languages</Label>
-                    <Multiselect
-                        v-model="form.languages"
-                        :options="formattedLanguages"
-                        :multiple="true"
-                        :close-on-select="false"
-                        :clear-on-select="false"
-                        :preserve-search="true"
-                        label="label"
-                        track-by="value"
-                        placeholder="Sélectionne les langues"
-                        class="custom-multiselect"
-                    >
-                        <template #option="{ option }">
-                            <div class="flex items-center gap-2">
-                                <img :src="option.flag_url" :alt="option.label" class="h-5 w-5 rounded-full border" />
-                                <span>{{ option.label }}</span>
-                            </div>
-                        </template>
-                        <template #tag="{ option, remove }">
-                            <span class="mr-1 flex items-center gap-1 rounded bg-gray-100 px-2 py-1">
-                                <img :src="option.flag_url" :alt="option.label" class="h-4 w-4 rounded-full border" />
-                                <span class="text-xs">{{ option.label }}</span>
-                                <button type="button" @click="remove(option)" class="ml-1 text-gray-400 hover:text-red-500">&times;</button>
-                            </span>
-                        </template>
-                    </Multiselect>
+                    <MultiSelect
+                        v-model="selectedLanguageValues"
+                        :options="languageOptions"
+                        placeholder="Sélectionnez les langues..."
+                        :disabled="form.processing"
+                        class="w-full"
+                    />
                     <InputError :message="form.errors.languages" />
                 </div>
 
@@ -158,10 +139,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import MultiSelect from '@/components/ui/MultiSelect.vue';
+import { useRoutes } from '@/composables/useRoutes';
 import { useForm } from '@inertiajs/vue3';
-import { computed, watch } from 'vue';
-import Multiselect from 'vue-multiselect';
-import 'vue-multiselect/dist/vue-multiselect.min.css';
+import { computed, ref, watch, defineComponent, h } from 'vue';
 
 interface Language {
     id: number;
@@ -170,9 +151,9 @@ interface Language {
 }
 
 interface LanguageOption {
-    value: number;
+    value: string;
     label: string;
-    flag_url: string;
+    icon?: any;
 }
 
 const props = defineProps({
@@ -200,13 +181,36 @@ const props = defineProps({
 
 const emit = defineEmits(['close']);
 
-const formattedLanguages = computed<LanguageOption[]>(() => {
+const { siteRoutes } = useRoutes();
+
+// Créer un composant pour afficher le drapeau
+const FlagIcon = defineComponent({
+    props: {
+        flagUrl: String,
+        alt: String,
+    },
+    setup(props) {
+        return () => h('img', {
+            src: props.flagUrl,
+            alt: props.alt,
+            class: 'h-4 w-4 rounded-full border object-cover',
+        });
+    },
+});
+
+const languageOptions = computed<LanguageOption[]>(() => {
     return props.availableLanguages.map((lang) => ({
-        value: lang.id,
+        value: lang.id.toString(),
         label: lang.name,
-        flag_url: lang.flag_url,
+        icon: defineComponent({
+            setup() {
+                return () => h(FlagIcon, { flagUrl: lang.flag_url, alt: lang.name });
+            },
+        }),
     }));
 });
+
+const selectedLanguageValues = ref<string[]>([]);
 
 const form = useForm({
     name: props.site?.name || '',
@@ -217,15 +221,17 @@ const form = useForm({
     primary_color: props.site?.primary_color || '#4E8D44',
     secondary_color: props.site?.secondary_color || '#6b7280',
     accent_color: props.site?.accent_color || '#10b981',
-    languages: props.site?.languages
-        ? props.site.languages.map((l: any) => {
-              const found = props.availableLanguages.find((al: any) => al.id === (l.id ?? l.value));
-              return found
-                  ? { value: found.id, label: found.name, flag_url: found.flag_url }
-                  : { value: l.id ?? l.value, label: l.name ?? '', flag_url: l.flag_url ?? '' };
-          })
-        : [],
+    languages: [] as number[],
 });
+
+// Watch pour synchroniser les changements du multiselect avec le form
+watch(
+    selectedLanguageValues,
+    (newValues) => {
+        form.languages = newValues.map((value) => parseInt(value));
+    },
+    { deep: true },
+);
 
 watch(
     () => props.site,
@@ -239,14 +245,15 @@ watch(
             form.primary_color = newSite.primary_color || '#4E8D44';
             form.secondary_color = newSite.secondary_color || '#6b7280';
             form.accent_color = newSite.accent_color || '#10b981';
-            form.languages = newSite.languages
-                ? newSite.languages.map((l: any) => {
-                      const found = props.availableLanguages.find((al: any) => al.id === (l.id ?? l.value));
-                      return found
-                          ? { value: found.id, label: found.name, flag_url: found.flag_url }
-                          : { value: l.id ?? l.value, label: l.name ?? '', flag_url: l.flag_url ?? '' };
-                  })
-                : [];
+            
+            // Gérer les langues sélectionnées
+            if (newSite.languages) {
+                selectedLanguageValues.value = newSite.languages.map((l: any) => (l.id || l.value || l).toString());
+                form.languages = newSite.languages.map((l: any) => l.id || l.value || l);
+            } else {
+                selectedLanguageValues.value = [];
+                form.languages = [];
+            }
         } else {
             form.name = '';
             form.url = '';
@@ -256,6 +263,7 @@ watch(
             form.primary_color = '#4E8D44';
             form.secondary_color = '#6b7280';
             form.accent_color = '#10b981';
+            selectedLanguageValues.value = [];
             form.languages = [];
         }
     },
@@ -267,6 +275,7 @@ watch(
     (newValue) => {
         if (!newValue) {
             form.reset();
+            selectedLanguageValues.value = [];
         }
     },
 );
@@ -274,11 +283,10 @@ watch(
 const isEditing = computed(() => !!props.site?.id);
 
 const submit = () => {
-    form.languages = form.languages.map((lang: any) => lang.value);
     if (isEditing.value) {
-        form.put(route('sites.update', props.site.id));
+        form.put(siteRoutes.update(props.site.id));
     } else {
-        form.post(route('sites.store'));
+        form.post(siteRoutes.store());
     }
 };
 
@@ -288,6 +296,7 @@ watch(
         if (success) {
             emit('close');
             form.reset();
+            selectedLanguageValues.value = [];
         }
     },
 );
@@ -298,27 +307,6 @@ function copyToClipboard(text: string) {
 </script>
 
 <style>
-.custom-multiselect .multiselect__tags {
-    min-height: 44px;
-    border-radius: 6px;
-    border: 1px solid #d1d5db;
-    background: #fff;
-    padding: 6px 8px;
-    font-size: 15px;
-}
-.custom-multiselect .multiselect__option--highlight {
-    background: #f3f4f6;
-    color: #111;
-}
-.custom-multiselect .multiselect__option--selected {
-    background: #e5e7eb;
-    color: #111;
-}
-.custom-multiselect .multiselect__tag {
-    background: #f3f4f6;
-    color: #111;
-    border-radius: 4px;
-}
 .custom-dialog-content {
     max-width: 700px;
     width: 95vw;

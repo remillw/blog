@@ -3,30 +3,33 @@ import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { useRoutes } from '@/composables/useRoutes';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
 import { BookOpen, FileText, Folder, Globe, LayoutGrid, Tags } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
+const { appRoutes, articleRoutes, categoryRoutes, siteRoutes } = useRoutes();
+
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: '/dashboard',
+        href: appRoutes.dashboard(),
         icon: LayoutGrid,
     },
     {
         title: 'Sites',
-        href: '/sites',
+        href: siteRoutes.index(),
         icon: Globe,
     },
     {
         title: 'Articles',
-        href: '/articles',
+        href: articleRoutes.index(),
         icon: FileText,
     },
     {
         title: 'Categories',
-        href: '/categories',
+        href: categoryRoutes.index(),
         icon: Tags,
     },
 ];
@@ -51,7 +54,7 @@ const footerNavItems: NavItem[] = [
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link href="/dashboard">
+                        <Link :href="appRoutes.dashboard()">
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>

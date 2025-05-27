@@ -232,6 +232,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useRoutes } from '@/composables/useRoutes';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
@@ -266,14 +267,16 @@ const { sites, availableLanguages } = defineProps<{
     }[];
 }>();
 
+const { appRoutes, siteRoutes } = useRoutes();
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Dashboard',
-        href: '/dashboard',
+        href: appRoutes.dashboard(),
     },
     {
         title: 'Sites',
-        href: '/sites',
+        href: siteRoutes.index(),
     },
 ];
 
@@ -313,20 +316,20 @@ const closeForm = () => {
 };
 
 const activateSite = (site: Site) => {
-    router.put(route('sites.update', site.id), {
+    router.put(siteRoutes.update(site.id), {
         status: 'active',
     });
 };
 
 const deactivateSite = (site: Site) => {
-    router.put(route('sites.update', site.id), {
+    router.put(siteRoutes.update(site.id), {
         status: 'inactive',
     });
 };
 
 const deleteSite = (site: Site) => {
     if (confirm('Are you sure you want to delete this site?')) {
-        router.delete(route('sites.destroy', site.id));
+        router.delete(siteRoutes.destroy(site.id));
     }
 };
 

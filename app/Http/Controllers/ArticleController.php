@@ -20,16 +20,22 @@ class ArticleController extends Controller
 
     public function index()
     {
+        // Pour l'instant, récupérer tous les articles de l'utilisateur
+        // TODO: Implémenter la logique de site actuel plus tard
+        $userSiteIds = Site::where('user_id', Auth::id())->pluck('id');
+        
         $articles = Article::with(['author', 'categories', 'tags'])
-            ->where('site_id', Auth::user()->current_site_id)
+            ->whereIn('site_id', $userSiteIds)
             ->latest()
             ->paginate(10);
 
-        $categories = Category::where('site_id', Auth::user()->current_site_id)
-            ->orderBy('name')
-            ->get();
+        // Récupérer les catégories via la relation many-to-many avec les sites de l'utilisateur
+        $categories = Category::whereHas('sites', function ($query) use ($userSiteIds) {
+            $query->whereIn('sites.id', $userSiteIds);
+        })->orderBy('name')->get();
 
-        $tags = Tag::where('site_id', Auth::user()->current_site_id)
+        // Récupérer les tags des sites de l'utilisateur
+        $tags = Tag::whereIn('site_id', $userSiteIds)
             ->orderBy('name')
             ->get();
 
@@ -42,11 +48,14 @@ class ArticleController extends Controller
 
     public function create()
     {
-        $categories = Category::where('site_id', Auth::user()->current_site_id)
-            ->orderBy('name')
-            ->get();
+        // Récupérer les catégories via la relation many-to-many avec les sites de l'utilisateur
+        $userSiteIds = Site::where('user_id', Auth::id())->pluck('id');
+        $categories = Category::whereHas('sites', function ($query) use ($userSiteIds) {
+            $query->whereIn('sites.id', $userSiteIds);
+        })->orderBy('name')->get();
 
-        $tags = Tag::where('site_id', Auth::user()->current_site_id)
+        // Récupérer les tags des sites de l'utilisateur
+        $tags = Tag::whereIn('site_id', $userSiteIds)
             ->orderBy('name')
             ->get();
 
@@ -110,25 +119,29 @@ class ArticleController extends Controller
     {
         $article->load(['categories', 'tags']);
 
-        $categories = Category::where('site_id', Auth::user()->current_site_id)
+        // Récupérer les catégories via la relation many-to-many avec les sites de l'utilisateur
+        $userSiteIds = Site::where('user_id', Auth::id())->pluck('id');
+        $categories = Category::whereHas('sites', function ($query) use ($userSiteIds) {
+            $query->whereIn('sites.id', $userSiteIds);
+        })->orderBy('name')->get();
+
+        // Récupérer les tags des sites de l'utilisateur
+        $tags = Tag::whereIn('site_id', $userSiteIds)
             ->orderBy('name')
             ->get();
 
-        $tags = Tag::where('site_id', Auth::user()->current_site_id)
-            ->orderBy('name')
-            ->get();
-
-        $site = Auth::user()->currentSite;
+        // Récupérer le site de l'article pour les couleurs
+        $site = Site::find($article->site_id);
 
         return Inertia::render('Articles/Edit', [
             'article' => $article,
             'categories' => $categories,
             'tags' => $tags,
-            'site' => [
+            'site' => $site ? [
                 'primary_color' => $site->primary_color,
                 'secondary_color' => $site->secondary_color,
                 'accent_color' => $site->accent_color,
-            ],
+            ] : null,
         ]);
     }
 

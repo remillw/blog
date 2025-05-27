@@ -4,9 +4,12 @@ import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useRoutes } from '@/composables/useRoutes';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
+
+const { authRoutes } = useRoutes();
 
 const form = useForm({
     name: '',
@@ -16,7 +19,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post(route('register'), {
+    form.post(authRoutes.register(), {
         onFinish: () => form.reset('password', 'password_confirmation'),
     });
 };
@@ -76,7 +79,7 @@ const submit = () => {
 
             <div class="text-center text-sm text-muted-foreground">
                 Already have an account?
-                <TextLink :href="route('login')" class="underline underline-offset-4" :tabindex="6">Log in</TextLink>
+                <TextLink :href="authRoutes.login()" class="underline underline-offset-4" :tabindex="6">Log in</TextLink>
             </div>
         </form>
     </AuthBase>

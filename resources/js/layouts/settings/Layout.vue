@@ -2,21 +2,24 @@
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { useRoutes } from '@/composables/useRoutes';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
+
+const { settingsRoutes } = useRoutes();
 
 const sidebarNavItems: NavItem[] = [
     {
         title: 'Profile',
-        href: '/settings/profile',
+        href: settingsRoutes.profile(),
     },
     {
         title: 'Password',
-        href: '/settings/password',
+        href: settingsRoutes.security(),
     },
     {
         title: 'Appearance',
-        href: '/settings/appearance',
+        href: settingsRoutes.appearance(),
     },
 ];
 
