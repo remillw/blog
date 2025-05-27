@@ -22,6 +22,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('categories', CategoryController::class);
     Route::post('/articles/upload-image', [ArticleController::class, 'uploadImage'])->name('articles.upload-image');
     Route::post('/articles/fetch-url-metadata', [ArticleController::class, 'fetchUrlMetadata'])->name('articles.fetch-url-metadata');
+    Route::post('/articles/recover', [ArticleController::class, 'recover'])->name('articles.recover');
     Route::get('/sites/{id}/colors', [SiteController::class, 'colors'])->name('sites.colors');
     Route::get('/sites/{id}/categories', [CategoryController::class, 'getBySite'])->name('sites.categories');
     Route::get('/debug/categories/{siteId}', function($siteId) {

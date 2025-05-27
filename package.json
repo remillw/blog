@@ -46,6 +46,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "concurrently": "^9.0.1",
+        "editorjs-html": "^4.0.5",
         "editorjs-text-alignment-blocktune": "^1.0.3",
         "editorjs-text-color-plugin": "^2.0.4",
         "laravel-vite-plugin": "^1.0",

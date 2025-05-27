@@ -3,38 +3,14 @@
         <form @submit.prevent="submit" class="space-y-6">
             <div class="space-y-2">
                 <Label for="site_id">Site</Label>
-                <Combobox by="label" v-model="selectedSite" @update:model-value="onSiteSelect">
-                    <ComboboxAnchor as-child>
-                        <ComboboxTrigger
-                            class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus:ring-ring flex h-10 w-full items-center justify-between rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1"
-                        >
-                            <ComboboxInput
-                                :display-value="(val) => val?.label ?? ''"
-                                placeholder="Sélectionner un site..."
-                                class="placeholder:text-muted-foreground flex-1 border-none bg-transparent outline-none"
-                            />
-                            <ChevronsUpDown class="h-4 w-4 opacity-50" />
-                        </ComboboxTrigger>
-                    </ComboboxAnchor>
-
-                    <ComboboxList
-                        class="!right-auto !left-0 z-50 w-full min-w-[var(--radix-popper-anchor-width)]"
-                        data-side="bottom"
-                        data-align="start"
-                    >
-                        <ComboboxEmpty> Aucun site trouvé. </ComboboxEmpty>
-
-                        <ComboboxGroup>
-                            <ComboboxItem v-for="option in siteOptions" :key="option.value" :value="option" @select="() => onSiteSelect(option)">
-                                {{ option.label }}
-
-                                <ComboboxItemIndicator>
-                                    <Check class="ml-auto h-4 w-4" />
-                                </ComboboxItemIndicator>
-                            </ComboboxItem>
-                        </ComboboxGroup>
-                    </ComboboxList>
-                </Combobox>
+                <MultiSelect
+                    v-model="selectedSiteValues"
+                    :options="siteOptions"
+                    placeholder="Sélectionner un site..."
+                    :disabled="form.processing"
+                    :max-selections="1"
+                    class="w-full"
+                />
                 <InputError :message="form.errors.site_id" />
             </div>
             <div v-if="siteColors.primary_color" class="space-y-2">
@@ -107,7 +83,7 @@
                     <div class="space-y-4">
                         <div class="space-y-2">
                             <Label for="categories">Categories</Label>
-                            <div v-if="!selectedSite" class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                            <div v-if="selectedSiteValues.length === 0" class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
                                 Sélectionnez d'abord un site pour voir les catégories disponibles
                             </div>
                             <MultiSelect
@@ -118,7 +94,7 @@
                                 :disabled="form.processing || availableCategories.length === 0"
                                 class="w-full"
                             />
-                            <div v-if="selectedSite && availableCategories.length === 0" class="mt-1 text-sm text-gray-500">
+                            <div v-if="selectedSiteValues.length > 0 && availableCategories.length === 0" class="mt-1 text-sm text-gray-500">
                                 Aucune catégorie disponible pour ce site
                             </div>
                             <InputError :message="form.errors.categories" class="mt-2" />
@@ -176,7 +152,7 @@
                 <div class="rounded-lg border">
                     <EditorJS
                         :initial-content="form.content"
-                        @update:content="(content) => (form.content = content)"
+                        @update:content="handleContentUpdate"
                         :disabled="form.processing"
                         class="min-h-[400px]"
                     />
@@ -214,6 +190,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import MultiSelect from '@/components/ui/MultiSelect.vue';
 import { useRoutes } from '@/composables/useRoutes';
+import { useEditorJSConverter } from '@/composables/useEditorJSConverter';
 import { useForm } from '@inertiajs/vue3';
 import axios from 'axios';
 import { Check, ChevronsUpDown } from 'lucide-vue-next';
@@ -234,6 +211,7 @@ interface Article {
     title: string;
     excerpt: string;
     content: string;
+    content_html: string;
     featured_image_url: string;
     status: string;
     scheduled_at?: string;
@@ -256,11 +234,24 @@ const props = defineProps<{
 const emit = defineEmits(['close']);
 
 const { articleRoutes, siteRoutes } = useRoutes();
+const { convertForWebhook, convertToHTML, convertHTMLToEditorJS } = useEditorJSConverter();
+
+// Déclarations des refs AVANT les watchers
+const siteColors = ref({
+    primary_color: '',
+    secondary_color: '',
+    accent_color: '',
+});
+
+const selectedSiteValues = ref<string[]>([]);
+const selectedCategoryValues = ref<string[]>([]);
+const availableCategories = ref<Category[]>([]);
 
 const form = useForm({
     title: '',
     excerpt: '',
     content: '',
+    content_html: '',
     featured_image_url: '',
     status: 'draft',
     scheduled_at: undefined as string | undefined,
@@ -274,80 +265,7 @@ const form = useForm({
     site_id: '' as string,
 });
 
-watch(
-    () => form.processing,
-    (newValue) => {
-        console.log('Form processing state:', newValue);
-    },
-    { immediate: true },
-);
-
-const isEditing = computed(() => !!props.article?.id);
-
-watch(
-    () => props.article,
-    async (newArticle) => {
-        if (newArticle && 'id' in newArticle) {
-            form.title = newArticle.title;
-            form.excerpt = newArticle.excerpt;
-            form.content = newArticle.content;
-            form.featured_image_url = newArticle.featured_image_url;
-            form.meta_title = newArticle.meta_title;
-            form.meta_description = newArticle.meta_description;
-            form.meta_keywords = newArticle.meta_keywords;
-            form.canonical_url = newArticle.canonical_url;
-            form.status = newArticle.status;
-            form.scheduled_at = newArticle.scheduled_at || undefined;
-            form.author_name = newArticle.author_name;
-            form.author_bio = newArticle.author_bio;
-            form.categories = newArticle.categories?.map((c) => c.id) || [];
-
-            // Si l'article a un site_id, le précharger
-            if (newArticle.site_id) {
-                const siteOption = siteOptions.value.find((s) => s.value === String(newArticle.site_id));
-                if (siteOption) {
-                    selectedSite.value = siteOption;
-                    form.site_id = String(newArticle.site_id);
-                    await Promise.all([fetchSiteColors(newArticle.site_id), fetchSiteCategories(newArticle.site_id)]);
-
-                    // Précharger la catégorie sélectionnée si il y en a une
-                    if (newArticle.categories && newArticle.categories.length > 0) {
-                        selectedCategoryValues.value = newArticle.categories.map((cat) => cat.id.toString());
-                    }
-                }
-            }
-        } else {
-            form.reset();
-            selectedSite.value = null;
-            selectedCategoryValues.value = [];
-            availableCategories.value = [];
-            siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
-        }
-    },
-    { immediate: true },
-);
-
-const submit = () => {
-    if (isEditing.value && props.article && props.article.id) {
-        form.put(articleRoutes.update(props.article.id), {
-            onSuccess: () => emit('close'),
-        });
-    } else {
-        form.post(articleRoutes.store(), {
-            onSuccess: () => emit('close'),
-        });
-    }
-};
-
-const siteColors = ref({
-    primary_color: '',
-    secondary_color: '',
-    accent_color: '',
-});
-
-const selectedSite = ref<{ value: string; label: string } | null>(null);
-const availableCategories = ref<Category[]>([]);
-
+// Computed properties
 const categoryOptions = computed(() => {
     return availableCategories.value.map((c) => ({
         value: c.id.toString(),
@@ -368,18 +286,7 @@ const siteOptions = computed(() => {
     return options;
 });
 
-const onSiteSelect = async (option: any) => {
-    selectedSite.value = option;
-    form.site_id = String(option.value);
-
-    // Reset categories when changing site
-    form.categories = [];
-    availableCategories.value = [];
-    selectedCategoryValues.value = [];
-
-    await Promise.all([fetchSiteColors(option.value), fetchSiteCategories(option.value)]);
-};
-
+// Functions
 const fetchSiteColors = async (value: any) => {
     const siteId = value ? String(value) : '';
     if (!siteId) {
@@ -420,7 +327,189 @@ const fetchSiteCategories = async (siteId: any) => {
     }
 };
 
-const selectedCategoryValues = ref<string[]>([]);
+const handleContentUpdate = (content: string) => {
+    console.log('🔥 handleContentUpdate called with:', content ? content.substring(0, 200) + '...' : 'empty content');
+    
+    form.content = content;
+    
+    // Convertir immédiatement en HTML
+    if (content) {
+        try {
+            console.log('🔄 Attempting to parse content...');
+            const editorJSData = typeof content === 'string' ? JSON.parse(content) : content;
+            console.log('✅ Parsed EditorJS data:', JSON.stringify(editorJSData, null, 2));
+            
+            // Vérifier la structure des blocs
+            if (editorJSData.blocks) {
+                console.log('📦 Blocks found:', editorJSData.blocks.length);
+                editorJSData.blocks.forEach((block: any, index: number) => {
+                    console.log(`Block ${index}:`, {
+                        type: block.type,
+                        data: block.data
+                    });
+                });
+            }
+            
+            console.log('🔄 Converting to HTML...');
+            const htmlResult = convertForWebhook(editorJSData);
+            console.log('✅ HTML conversion result:', htmlResult);
+            
+            form.content_html = htmlResult;
+            console.log('✅ form.content_html updated:', form.content_html.substring(0, 100) + '...');
+        } catch (error) {
+            console.error('❌ Erreur lors de la conversion du contenu:', error);
+            form.content_html = '';
+        }
+    } else {
+        console.log('⚠️ Content is empty, clearing content_html');
+        form.content_html = '';
+    }
+};
+
+// Watchers APRÈS les déclarations
+watch(
+    () => form.processing,
+    (newValue) => {
+        console.log('Form processing state:', newValue);
+    },
+    { immediate: true },
+);
+
+const isEditing = computed(() => !!props.article?.id);
+
+watch(
+    () => props.article,
+    async (newArticle) => {
+        if (newArticle && 'id' in newArticle) {
+            form.title = newArticle.title;
+            form.excerpt = newArticle.excerpt;
+            
+            // Gestion du contenu : priorité à EditorJS, sinon conversion depuis HTML
+            if (newArticle.content) {
+                // Si on a du contenu EditorJS, l'utiliser directement
+                form.content = newArticle.content;
+            } else if (newArticle.content_html) {
+                // Si on a seulement du HTML (article reçu via webhook), le convertir
+                const editorJSData = convertHTMLToEditorJS(newArticle.content_html);
+                form.content = JSON.stringify(editorJSData);
+            } else {
+                form.content = '';
+            }
+            
+            form.content_html = newArticle.content_html || '';
+            form.featured_image_url = newArticle.featured_image_url;
+            form.meta_title = newArticle.meta_title;
+            form.meta_description = newArticle.meta_description;
+            form.meta_keywords = newArticle.meta_keywords;
+            form.canonical_url = newArticle.canonical_url;
+            form.status = newArticle.status;
+            form.scheduled_at = newArticle.scheduled_at || undefined;
+            form.author_name = newArticle.author_name;
+            form.author_bio = newArticle.author_bio;
+            form.categories = newArticle.categories?.map((c) => c.id) || [];
+
+            // Si l'article a un site_id, le précharger
+            if (newArticle.site_id) {
+                const siteOption = siteOptions.value.find((s) => s.value === String(newArticle.site_id));
+                if (siteOption) {
+                    selectedSiteValues.value = [String(newArticle.site_id)];
+                    form.site_id = String(newArticle.site_id);
+                    await Promise.all([fetchSiteColors(newArticle.site_id), fetchSiteCategories(newArticle.site_id)]);
+
+                    // Précharger la catégorie sélectionnée si il y en a une
+                    if (newArticle.categories && newArticle.categories.length > 0) {
+                        selectedCategoryValues.value = newArticle.categories.map((cat) => cat.id.toString());
+                    }
+                }
+            }
+        } else {
+            form.reset();
+            selectedSiteValues.value = [];
+            selectedCategoryValues.value = [];
+            availableCategories.value = [];
+            siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
+        }
+    },
+    { immediate: true },
+);
+
+const submit = () => {
+    console.log('🚀 Submit called');
+    console.log('📝 form.content:', form.content ? form.content.substring(0, 200) + '...' : 'empty');
+    console.log('🌐 form.content_html BEFORE conversion:', form.content_html ? form.content_html.substring(0, 200) + '...' : 'empty');
+    
+    // Convertir le contenu EditorJS en HTML avant l'envoi
+    if (form.content) {
+        try {
+            const editorJSData = typeof form.content === 'string' ? JSON.parse(form.content) : form.content;
+            form.content_html = convertForWebhook(editorJSData);
+            console.log('🌐 form.content_html AFTER conversion:', form.content_html ? form.content_html.substring(0, 200) + '...' : 'empty');
+        } catch (error) {
+            console.error('❌ Erreur lors de la conversion du contenu dans submit:', error);
+            form.content_html = '';
+        }
+    }
+
+    console.log('📤 Final form data being sent:', {
+        title: form.title,
+        content: form.content ? 'has content' : 'empty',
+        content_html: form.content_html ? 'has html' : 'empty',
+        site_id: form.site_id
+    });
+
+    if (isEditing.value && props.article && props.article.id) {
+        form.put(articleRoutes.update(props.article.id), {
+            onSuccess: () => emit('close'),
+        });
+    } else {
+        form.post(articleRoutes.store(), {
+            onSuccess: () => emit('close'),
+        });
+    }
+};
+
+// Watcher pour convertir automatiquement le contenu EditorJS en HTML
+watch(
+    () => form.content,
+    (newContent) => {
+        if (newContent) {
+            try {
+                const editorJSData = typeof newContent === 'string' ? JSON.parse(newContent) : newContent;
+                form.content_html = convertForWebhook(editorJSData);
+            } catch (error) {
+                console.error('Erreur lors de la conversion automatique du contenu:', error);
+                form.content_html = '';
+            }
+        } else {
+            form.content_html = '';
+        }
+    },
+    { deep: true }
+);
+
+// Watch pour gérer les changements de site
+watch(
+    selectedSiteValues,
+    async (newSiteValues) => {
+        if (newSiteValues.length > 0) {
+            const siteId = newSiteValues[0];
+            form.site_id = siteId;
+            
+            // Reset categories when changing site
+            form.categories = [];
+            availableCategories.value = [];
+            selectedCategoryValues.value = [];
+            
+            await Promise.all([fetchSiteColors(siteId), fetchSiteCategories(siteId)]);
+        } else {
+            form.site_id = '';
+            siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
+            availableCategories.value = [];
+            selectedCategoryValues.value = [];
+        }
+    },
+    { deep: true }
+);
 
 // Watch pour synchroniser les changements du multiselect avec le form
 watch(
