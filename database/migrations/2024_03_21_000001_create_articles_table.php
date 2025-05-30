@@ -17,8 +17,7 @@ return new class extends Migration
             $table->longText('content'); // Format EditorJS (JSON)
             $table->longText('content_html')->nullable(); // HTML pour webhooks
             $table->text('excerpt')->nullable();
-            $table->string('featured_image')->nullable();
-            $table->string('featured_image_url')->nullable(); // URL pour les images externes
+            $table->string('cover_image')->nullable();
             $table->string('meta_title')->nullable();
             $table->text('meta_description')->nullable();
             $table->json('meta_keywords')->nullable();

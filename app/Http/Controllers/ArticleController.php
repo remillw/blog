@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Storage;
 
 class ArticleController extends Controller
 {
@@ -24,8 +25,7 @@ class ArticleController extends Controller
 
     public function index()
     {
-        // Pour l'instant, récupérer tous les articles de l'utilisateur
-        // TODO: Implémenter la logique de site actuel plus tard
+        
         $userSiteIds = Site::where('user_id', Auth::id())->pluck('id');
         
         $articles = Article::with(['author', 'categories', 'tags'])
@@ -81,7 +81,7 @@ class ArticleController extends Controller
             'content' => 'required|string',
             'content_html' => 'nullable|string', // HTML converti côté frontend
             'excerpt' => 'nullable|string',
-            'featured_image_url' => 'nullable|string',
+            'cover_image' => 'nullable|image|max:2048', // Image de couverture uploadée
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string',
             'meta_keywords' => 'nullable|string',
@@ -112,13 +112,20 @@ class ArticleController extends Controller
             $counter++;
         }
 
+        // Gérer l'upload de l'image de couverture avec un nom personnalisé
+        $coverImagePath = null;
+        if ($request->hasFile('cover_image')) {
+            $coverImagePath = $this->storeCoverImage($request->file('cover_image'), $slug);
+        }
+
         $article = Article::create([
             ...$validated,
             'user_id' => Auth::id(),
             'slug' => $slug,
+            'cover_image_path' => $coverImagePath,
             'source' => 'created',
-            'external_id' => Str::uuid(), // ID unique pour identifier l'article côté externe
-            'is_synced' => false, // Pas encore envoyé via webhook
+            'external_id' => Str::uuid(),
+            'is_synced' => false, 
         ]);
 
         if (!empty($validated['categories'])) {
@@ -129,7 +136,6 @@ class ArticleController extends Controller
             $article->tags()->sync($validated['tags']);
         }
 
-        // Envoyer le webhook si l'article est publié
         if ($validated['status'] === 'published') {
             $this->sendWebhook($article);
         }
@@ -170,9 +176,9 @@ class ArticleController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string',
-            'content_html' => 'nullable|string', // HTML converti côté frontend
+            'content_html' => 'nullable|string', 
             'excerpt' => 'nullable|string',
-            'featured_image_url' => 'nullable|string',
+            'cover_image' => 'nullable|image|max:2048', // Image de couverture uploadée
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string',
             'meta_keywords' => 'nullable|string',
@@ -195,6 +201,7 @@ class ArticleController extends Controller
             ->firstOrFail();
 
         // Mettre à jour le slug si le titre a changé
+        $newSlug = $article->slug;
         if ($article->title !== $validated['title']) {
             $slug = Str::slug($validated['title']);
             $originalSlug = $slug;
@@ -204,6 +211,7 @@ class ArticleController extends Controller
                 $counter++;
             }
             $validated['slug'] = $slug;
+            $newSlug = $slug;
         }
 
         // Marquer comme non synchronisé si le contenu a changé
@@ -211,7 +219,20 @@ class ArticleController extends Controller
             $validated['is_synced'] = false;
         }
 
-        $article->update($validated);
+        // Gérer l'upload de l'image de couverture
+        $updateData = $validated;
+        if ($request->hasFile('cover_image')) {
+            // Supprimer l'ancienne image si elle existe
+            if ($article->cover_image_path) {
+                $this->deleteCoverImage($article->cover_image_path);
+            }
+            
+            // Stocker la nouvelle image avec le slug (potentiellement mis à jour)
+            $coverImagePath = $this->storeCoverImage($request->file('cover_image'), $newSlug);
+            $updateData['cover_image_path'] = $coverImagePath;
+        }
+
+        $article->update($updateData);
 
         if (isset($validated['categories'])) {
             $article->categories()->sync($validated['categories']);
@@ -232,6 +253,11 @@ class ArticleController extends Controller
 
     public function destroy(Article $article)
     {
+        // Supprimer l'image de couverture si elle existe
+        if ($article->cover_image_path) {
+            $this->deleteCoverImage($article->cover_image_path);
+        }
+
         // Envoyer un webhook de suppression si l'article était synchronisé
         if ($article->is_synced && $article->external_id) {
             $this->sendDeleteWebhook($article);
@@ -417,69 +443,8 @@ class ArticleController extends Controller
         }
     }
 
-    /**
-     * Handle image upload from EditorJS
-     */
-    public function uploadImage(Request $request)
-    {
-        $request->validate([
-            'image' => 'required|image|max:2048', // Max 2MB
-        ]);
-
-        $path = $request->file('image')->store('editor-images', 'public');
-
-        return response()->json([
-            'success' => 1,
-            'file' => [
-                'url' => asset('storage/' . $path)
-            ]
-        ]);
-    }
-
-    /**
-     * Fetch metadata from a URL for EditorJS LinkTool
-     */
-    public function fetchUrlMetadata(Request $request)
-    {
-        $request->validate([
-            'url' => 'required|url'
-        ]);
-
-        try {
-            $html = file_get_contents($request->url);
-            $doc = new \DOMDocument();
-            @$doc->loadHTML($html);
-            $xpath = new \DOMXPath($doc);
-
-            // Get title
-            $title = $xpath->query('//title')->item(0)?->textContent;
-            
-            // Get description
-            $description = $xpath->query('//meta[@name="description"]')->item(0)?->getAttribute('content');
-            
-            // Get image
-            $image = $xpath->query('//meta[@property="og:image"]')->item(0)?->getAttribute('content');
-            if (!$image) {
-                $image = $xpath->query('//meta[@name="twitter:image"]')->item(0)?->getAttribute('content');
-            }
-
-            return response()->json([
-                'success' => 1,
-                'meta' => [
-                    'title' => $title,
-                    'description' => $description,
-                    'image' => [
-                        'url' => $image
-                    ]
-                ]
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => 0,
-                'message' => 'Could not fetch URL metadata'
-            ], 400);
-        }
-    }
+    
+    
 
     /**
      * Récupère un article supprimé depuis le SaaS
@@ -529,4 +494,133 @@ class ArticleController extends Controller
             'message' => 'Article non trouvé sur le SaaS'
         ], 404);
     }
-} 
+
+    /**
+     * Handle cover image upload
+     */
+    public function uploadCoverImage(Request $request)
+    {
+        $request->validate([
+            'cover_image' => 'required|image|max:2048', // Max 2MB
+            'article_slug' => 'nullable|string', // Slug de l'article pour nommer le fichier
+        ]);
+
+        // Générer un nom temporaire si pas de slug fourni
+        $slug = $request->input('article_slug', 'temp-' . time());
+        $path = $this->storeCoverImage($request->file('cover_image'), $slug);
+
+        return response()->json([
+            'success' => true,
+            'path' => $path,
+            'url' => asset('storage/' . $path)
+        ]);
+    }
+
+    /**
+     * Store cover image with proper naming
+     */
+    private function storeCoverImage($file, $slug)
+    {
+        $extension = $file->getClientOriginalExtension();
+        $filename = $slug . '-cover.' . $extension;
+        
+        // Créer le chemin avec l'année/mois pour organiser les fichiers
+        $directory = 'cover-images/' . date('Y/m');
+        $path = $directory . '/' . $filename;
+        
+        // Vérifier si un fichier avec ce nom existe déjà et ajouter un suffixe si nécessaire
+        $counter = 1;
+        $originalPath = $path;
+        while (Storage::disk('public')->exists($path)) {
+            $pathInfo = pathinfo($originalPath);
+            $path = $pathInfo['dirname'] . '/' . $pathInfo['filename'] . '-' . $counter . '.' . $pathInfo['extension'];
+            $counter++;
+        }
+        
+        // Stocker le fichier
+        Storage::disk('public')->putFileAs($directory, $file, basename($path));
+        
+        return $path;
+    }
+
+    /**
+     * Delete cover image
+     */
+    private function deleteCoverImage($path)
+    {
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+    }
+
+    public function uploadImage(Request $request)
+    {
+        $request->validate([
+            'image' => 'required|image|max:5120', // 5MB max pour les images
+        ]);
+
+        try {
+            $image = $request->file('image');
+            $originalName = $image->getClientOriginalName();
+            $extension = $image->getClientOriginalExtension();
+            
+            // Générer un nom de fichier unique
+            $filename = time() . '_' . Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) . '.' . $extension;
+            
+            // Stocker l'image dans le dossier posts/content
+            $path = $image->storeAs('posts/content', $filename, 'public');
+
+            return response()->json([
+                'success' => 1,
+                'file' => [
+                    'url' => asset('storage/' . $path),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Erreur lors de l\'upload de l\'image: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload file for EditorJS Attaches tool
+     */
+    public function uploadFile(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|max:10240', // 10MB max
+        ]);
+
+        try {
+            $file = $request->file('file');
+            $originalName = $file->getClientOriginalName();
+            $extension = $file->getClientOriginalExtension();
+            $size = $file->getSize();
+            
+            // Générer un nom de fichier unique
+            $filename = time() . '_' . Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) . '.' . $extension;
+            
+            // Stocker le fichier
+            $path = $file->storeAs('editor-files', $filename, 'public');
+            
+            return response()->json([
+                'success' => 1,
+                'file' => [
+                    'url' => asset('storage/' . $path),
+                    'name' => $originalName,
+                    'size' => $size,
+                    'extension' => $extension,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => 0,
+                'message' => 'Erreur lors de l\'upload du fichier: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+}

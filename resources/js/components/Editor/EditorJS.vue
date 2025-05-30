@@ -4,16 +4,14 @@ import EditorJS from '@editorjs/editorjs';
 import Header from '@editorjs/header';
 import ImageTool from '@editorjs/image';
 import List from '@editorjs/list';
-import { defineEmits, defineProps, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, defineEmits, defineProps, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 // @ts-expect-error - EditorJS embed plugin lacks TypeScript definitions
 import Embed from '@editorjs/embed';
 // @ts-expect-error - EditorJS link plugin lacks TypeScript definitions
 import LinkTool from '@editorjs/link';
 import Paragraph from '@editorjs/paragraph';
-// @ts-expect-error - Color plugin lacks TypeScript definitions
-import ColorPlugin from 'editorjs-text-color-plugin';
 // @ts-expect-error - Alignment tune plugin lacks TypeScript definitions
-import { usePage } from '@inertiajs/vue3';
+import AttachesTool from '@editorjs/attaches';
 import AlignmentTuneTool from 'editorjs-text-alignment-blocktune';
 
 // Implémentation de la classe CustomTool au lieu d'une simple déclaration
@@ -58,7 +56,7 @@ class ButtonTool extends CustomTool {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     constructor({ data, api }: any) {
-        super({ data, api });
+        super();
         this.api = api;
         this.data = {
             text: data?.text || 'Cliquez ici',
@@ -156,10 +154,461 @@ class ButtonTool extends CustomTool {
     }
 }
 
+// Plugin d'image personnalisé avec contrôle de largeur
+class CustomImageTool extends ImageTool {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor(params: any) {
+        super(params);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    override render() {
+        const wrapper = super.render();
+
+        // Ajouter le contrôle de largeur personnalisé
+        this.addCustomWidthControl(wrapper);
+
+        // Ajouter un bouton pour afficher/masquer le contrôle
+        this.addToggleButton(wrapper);
+
+        return wrapper;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    addCustomWidthControl(wrapper: any) {
+        // Créer le conteneur pour le contrôle de largeur
+        const widthControl = document.createElement('div');
+        widthControl.className = 'image-width-control';
+        widthControl.style.cssText = `
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e1e5e9;
+        `;
+
+        // Créer le label
+        const label = document.createElement('label');
+        label.textContent = 'Largeur personnalisée: ';
+        label.style.cssText = `
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        `;
+
+        // Créer le slider
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '10';
+        slider.max = '100';
+        slider.value = '100';
+        slider.style.cssText = `
+            width: 100%;
+            margin-bottom: 8px;
+            accent-color: #3b82f6;
+        `;
+
+        // Créer l'affichage de la valeur
+        const valueDisplay = document.createElement('span');
+        valueDisplay.textContent = '100%';
+        valueDisplay.style.cssText = `
+            font-size: 14px;
+            color: #6b7280;
+            font-weight: 500;
+        `;
+
+        // Gestionnaire d'événement pour le slider
+        slider.addEventListener('input', (e) => {
+            const value = (e.target as HTMLInputElement).value;
+            valueDisplay.textContent = `${value}%`;
+
+            // Appliquer la largeur à l'image
+            const imageWrapper = wrapper.querySelector('.cdx-block');
+            if (imageWrapper) {
+                imageWrapper.style.maxWidth = `${value}%`;
+                imageWrapper.style.margin = '0 auto';
+            }
+        });
+
+        // Assembler le contrôle
+        const sliderContainer = document.createElement('div');
+        sliderContainer.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        `;
+
+        sliderContainer.appendChild(slider);
+        sliderContainer.appendChild(valueDisplay);
+
+        widthControl.appendChild(label);
+        widthControl.appendChild(sliderContainer);
+
+        // Ajouter le contrôle au wrapper
+        wrapper.appendChild(widthControl);
+
+        // Stocker la référence pour pouvoir l'afficher/masquer
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (this as any).widthControl = widthControl;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    addToggleButton(wrapper: any) {
+        const toggleButton = document.createElement('button');
+        toggleButton.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="8" width="16" height="4" rx="2" fill="currentColor"/>
+                <circle cx="6" cy="10" r="2" fill="white"/>
+                <path d="M1 4h18M1 16h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+        `;
+        toggleButton.title = 'Ajuster la largeur';
+        toggleButton.style.cssText = `
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #e1e5e9;
+            border-radius: 6px;
+            padding: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 10;
+        `;
+
+        toggleButton.addEventListener('mouseenter', () => {
+            toggleButton.style.background = 'white';
+            toggleButton.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+        });
+
+        toggleButton.addEventListener('mouseleave', () => {
+            toggleButton.style.background = 'rgba(255, 255, 255, 0.9)';
+            toggleButton.style.boxShadow = 'none';
+        });
+
+        toggleButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.toggleCustomWidthControl();
+        });
+
+        // Ajouter le bouton au wrapper avec position relative
+        wrapper.style.position = 'relative';
+        wrapper.appendChild(toggleButton);
+    }
+
+    // Méthode pour afficher/masquer le contrôle de largeur
+    toggleCustomWidthControl() {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const control = (this as any).widthControl;
+        if (control) {
+            control.style.display = control.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+}
+
+// Plugin de couleur personnalisé
+class CustomColorTool {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    api: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    config: any;
+    button: HTMLElement | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    currentSelection: any = null;
+
+    static get isInline() {
+        return true;
+    }
+
+    static get title() {
+        return 'Color';
+    }
+
+    static get sanitize() {
+        return {
+            span: {
+                style: true,
+            },
+        };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor({ api, config }: any) {
+        this.api = api;
+        this.config = config || {};
+    }
+
+    render() {
+        this.button = document.createElement('button');
+        (this.button as HTMLButtonElement).type = 'button';
+        this.button.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z" fill="currentColor"/>
+                <rect x="4" y="18" width="16" height="3" rx="1" fill="currentColor"/>
+            </svg>
+        `;
+        this.button.classList.add('ce-inline-tool');
+        this.button.title = 'Couleur du texte';
+
+        this.button.addEventListener('click', () => {
+            this.toggleColorPalette();
+        });
+
+        return this.button;
+    }
+
+    surround() {
+        // Ne pas appliquer automatiquement une couleur, juste ouvrir la palette
+        return;
+    }
+
+    checkState() {
+        const selection = this.api.selection.findParentTag('SPAN');
+        return !!selection;
+    }
+
+    toggleColorPalette() {
+        // Supprimer toute palette existante
+        const existingPalette = document.querySelector('.custom-color-palette');
+        if (existingPalette) {
+            existingPalette.remove();
+            return;
+        }
+
+        // Créer la palette de couleurs
+        const palette = document.createElement('div');
+        palette.className = 'custom-color-palette';
+        palette.style.cssText = `
+            position: fixed;
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+            min-width: 240px;
+            backdrop-filter: blur(10px);
+        `;
+
+        // Ajouter les couleurs
+        const colors = this.config.colors || [
+            '#000000',
+            '#FFFFFF',
+            '#6b7280',
+            '#ef4444',
+            '#f97316',
+            '#eab308',
+            '#22c55e',
+            '#3b82f6',
+            '#8b5cf6',
+            '#ec4899',
+        ];
+
+        colors.forEach((color: string) => {
+            const colorButton = document.createElement('button');
+            colorButton.style.cssText = `
+                width: 36px;
+                height: 36px;
+                border: 2px solid ${color === '#FFFFFF' ? '#e1e5e9' : 'transparent'};
+                border-radius: 8px;
+                background-color: ${color};
+                cursor: pointer;
+                transition: all 0.2s ease;
+                position: relative;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            `;
+
+            // Ajouter un effet de survol
+            colorButton.addEventListener('mouseenter', () => {
+                colorButton.style.transform = 'scale(1.15)';
+                colorButton.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+            });
+
+            colorButton.addEventListener('mouseleave', () => {
+                colorButton.style.transform = 'scale(1)';
+                colorButton.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+            });
+
+            colorButton.addEventListener('click', () => {
+                this.applyColor(color);
+                palette.remove();
+            });
+
+            palette.appendChild(colorButton);
+        });
+
+        // Ajouter un bouton pour supprimer la couleur
+        const removeButton = document.createElement('button');
+        removeButton.innerHTML = '✕';
+        removeButton.title = 'Supprimer la couleur';
+        removeButton.style.cssText = `
+            width: 36px;
+            height: 36px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        `;
+
+        removeButton.addEventListener('mouseenter', () => {
+            removeButton.style.transform = 'scale(1.15)';
+            removeButton.style.backgroundColor = '#fee2e2';
+            removeButton.style.color = '#dc2626';
+        });
+
+        removeButton.addEventListener('mouseleave', () => {
+            removeButton.style.transform = 'scale(1)';
+            removeButton.style.backgroundColor = '#f8f9fa';
+            removeButton.style.color = '#666';
+        });
+
+        removeButton.addEventListener('click', () => {
+            this.removeColor();
+            palette.remove();
+        });
+
+        palette.appendChild(removeButton);
+
+        // Positionner la palette près du bouton
+        if (this.button) {
+            const rect = this.button.getBoundingClientRect();
+            const paletteWidth = 240;
+            const paletteHeight = 120;
+
+            // Calculer la position optimale
+            let left = rect.left - paletteWidth / 2 + rect.width / 2;
+            let top = rect.bottom + 8;
+
+            // Ajuster si la palette sort de l'écran
+            if (left < 10) left = 10;
+            if (left + paletteWidth > window.innerWidth - 10) {
+                left = window.innerWidth - paletteWidth - 10;
+            }
+
+            if (top + paletteHeight > window.innerHeight - 10) {
+                top = rect.top - paletteHeight - 8;
+            }
+
+            palette.style.left = `${left}px`;
+            palette.style.top = `${top}px`;
+        }
+
+        document.body.appendChild(palette);
+
+        // Fermer la palette en cliquant ailleurs
+        setTimeout(() => {
+            document.addEventListener(
+                'click',
+                (e) => {
+                    if (!palette.contains(e.target as Node) && e.target !== this.button) {
+                        palette.remove();
+                    }
+                },
+                { once: true },
+            );
+        }, 100);
+    }
+
+    applyColor(color: string) {
+        // Sauvegarder la sélection actuelle
+        const currentSelection = window.getSelection();
+        if (!currentSelection || currentSelection.rangeCount === 0) return;
+
+        const range = currentSelection.getRangeAt(0);
+
+        if (!range.collapsed) {
+            // Il y a du texte sélectionné
+            const selectedText = range.toString();
+
+            // Approche simple et robuste : toujours créer un nouveau span propre
+            // 1. Supprimer tout le contenu sélectionné (spans inclus)
+            range.deleteContents();
+
+            // 2. Créer un span complètement nouveau
+            const span = document.createElement('span');
+            span.style.color = color;
+            span.textContent = selectedText;
+
+            // 3. Insérer le nouveau span
+            range.insertNode(span);
+
+            // 4. Sélectionner le nouveau span
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            currentSelection.removeAllRanges();
+            currentSelection.addRange(newRange);
+        } else {
+            // Pas de sélection, chercher un span parent
+            const parentSpan = this.findParentSpan(range.startContainer);
+            if (parentSpan) {
+                parentSpan.style.color = color;
+            }
+        }
+    }
+
+    // Fonction pour nettoyer les spans de couleur imbriqués (simplifiée)
+    cleanColorSpans(content: DocumentFragment): DocumentFragment {
+        // Cette fonction n'est plus nécessaire avec la nouvelle approche
+        return content;
+    }
+
+    removeColor() {
+        const currentSelection = window.getSelection();
+        if (!currentSelection || currentSelection.rangeCount === 0) return;
+
+        const range = currentSelection.getRangeAt(0);
+        const parentSpan = this.findParentSpan(range.startContainer);
+
+        if (parentSpan) {
+            // Remplacer le span par son contenu
+            const parent = parentSpan.parentNode;
+            if (parent) {
+                while (parentSpan.firstChild) {
+                    parent.insertBefore(parentSpan.firstChild, parentSpan);
+                }
+                parent.removeChild(parentSpan);
+            }
+        }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    findParentSpan(node: any): HTMLSpanElement | null {
+        while (node && node !== document.body) {
+            if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SPAN') {
+                return node as HTMLSpanElement;
+            }
+            node = node.parentNode;
+        }
+        return null;
+    }
+}
+
 const props = defineProps({
     initialContent: {
         type: String,
         default: '',
+    },
+    siteColors: {
+        type: Object,
+        default: () => ({
+            primary_color: '#4E8D44',
+            secondary_color: '#6b7280',
+            accent_color: '#10b981',
+        }),
     },
 });
 
@@ -168,154 +617,272 @@ const editorContainer = ref<HTMLElement | null>(null);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const editor = ref<any | null>(null);
 
-// Récupérer les couleurs du site depuis la page Inertia
-const page = usePage();
-const siteColors = ref({
-    primary: page.props.site?.primary_color || '#4E8D44',
-    secondary: page.props.site?.secondary_color || '#6b7280',
-    accent: page.props.site?.accent_color || '#10b981',
-});
+// Utiliser les couleurs du site passées en props ou les valeurs par défaut
+const siteColors = computed(() => ({
+    primary: props.siteColors?.primary_color || '#4E8D44',
+    secondary: props.siteColors?.secondary_color || '#6b7280',
+    accent: props.siteColors?.accent_color || '#10b981',
+}));
 
-onMounted(() => {
-    if (editorContainer.value) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let initialData: any = {
-            blocks: [],
-        };
+const initializeEditor = () => {
+    if (!editorContainer.value) return;
 
-        // Si le contenu initial est un JSON valide, l'utiliser, sinon créer un bloc par défaut
-        if (props.initialContent) {
-            try {
-                initialData = JSON.parse(props.initialContent);
-                if (!initialData.blocks) {
-                    initialData.blocks = [];
-                }
-            } catch {
-                // Si le contenu n'est pas un JSON valide, créer un paragraphe avec le texte
-                initialData = {
-                    blocks: [
+    console.log('🚀 Initializing editor with site colors:', props.siteColors);
+    console.log('🚀 ColorPlugin available:', CustomColorTool);
+
+    // Créer la collection de couleurs de manière plus simple
+    const siteSpecificColors = [props.siteColors?.primary_color, props.siteColors?.secondary_color, props.siteColors?.accent_color].filter(Boolean);
+
+    const baseColors = ['#000000', '#FFFFFF', '#6b7280', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899'];
+
+    const finalColorCollection = [...siteSpecificColors, ...baseColors];
+
+    console.log('🚀 Final color collection:', finalColorCollection);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let initialData: any = {
+        blocks: [],
+    };
+
+    // Si le contenu initial est un JSON valide, l'utiliser, sinon créer un bloc par défaut
+    if (props.initialContent) {
+        try {
+            initialData = JSON.parse(props.initialContent);
+            if (!initialData.blocks) {
+                initialData.blocks = [];
+            }
+        } catch {
+            // Si le contenu n'est pas un JSON valide, créer un paragraphe avec le texte
+            initialData = {
+                blocks: [
+                    {
+                        type: 'paragraph',
+                        data: {
+                            text: props.initialContent,
+                        },
+                    },
+                ],
+            };
+        }
+    }
+
+    // Configuration du plugin Color avec vérification
+    const colorConfig = {
+        colors: finalColorCollection,
+        defaultColor: props.siteColors?.primary_color || '#4E8D44',
+    };
+
+    console.log('🎨 Color plugin config:', colorConfig);
+
+    editor.value = new EditorJS({
+        holder: editorContainer.value,
+        tools: {
+            paragraph: {
+                // @ts-expect-error - EditorJS types are not fully compatible with our implementation
+                class: Paragraph,
+                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                tunes: ['alignmentTune'],
+            },
+            Color: {
+                class: CustomColorTool,
+                config: colorConfig,
+            },
+            header: {
+                // @ts-expect-error - EditorJS types are not fully compatible with our implementation
+                class: Header,
+                config: {
+                    levels: [2, 3, 4, 5, 6],
+                    defaultLevel: 3,
+                },
+                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                tunes: ['alignmentTune'],
+            },
+            list: {
+                // @ts-expect-error - EditorJS types are not fully compatible with our implementation
+                class: List,
+                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                tunes: ['alignmentTune'],
+            },
+            code: Code,
+            image: {
+                class: CustomImageTool,
+                config: {
+                    endpoints: {
+                        byFile: '/articles/upload-image',
+                    },
+                    field: 'image',
+                    types: 'image/*',
+                    additionalRequestHeaders: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    },
+                    captionPlaceholder: 'Entrez une légende...',
+                    buttonContent: 'Sélectionner une image',
+                    uploader: {
+                        uploadByFile: async (file: File) => {
+                            const formData = new FormData();
+                            formData.append('image', file);
+
+                            const response = await fetch('/articles/upload-image', {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                                },
+                            });
+
+                            const result = await response.json();
+                            return result;
+                        },
+                    },
+                    actions: [
                         {
-                            type: 'paragraph',
-                            data: {
-                                text: props.initialContent,
-                            },
+                            name: 'stretch',
+                            icon: '<svg width="17" height="10" viewBox="0 0 17 10" xmlns="http://www.w3.org/2000/svg"><path d="M13.568 5.925H4.056l1.703 1.703a1.125 1.125 0 0 1-1.59 1.591L.962 6.014A1.069 1.069 0 0 1 .588 4.26L4.38.469a1.069 1.069 0 0 1 1.512 1.511L4.084 3.787h9.606l-1.85-1.85a1.069 1.069 0 1 1 1.512-1.51l3.792 3.791a1.069 1.069 0 0 1-.475 1.788L13.514 9.16a1.125 1.125 0 0 1-1.59-1.591l1.644-1.644z"/></svg>',
+                            title: "Étirer l'image",
+                            toggle: true,
+                        },
+                        {
+                            name: 'withBorder',
+                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M15.8 10.592v2.043h2.35v2.138H15.8v2.232h-2.25v-2.232h-2.4v-2.138h2.4v-2.043h2.25zm1.9-8.025v2.138h-2.35v2.232h-2.25v-2.232h-2.4V2.567h2.4V.429h2.25v2.138h2.35z"/><path d="M4.05 8.967h2.35v2.043h2.25v2.138H6.4v2.232H4.05v-2.232H1.65v-2.138h2.4V8.967z"/></svg>',
+                            title: 'Ajouter une bordure',
+                            toggle: true,
+                        },
+                        {
+                            name: 'withBackground',
+                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10.043 8.265l3.183-3.183h-2.924L4.75 10.636v2.923l4.15-4.15v2.351l-2.158 2.159H8.9v2.137H4.7c-1.215 0-2.2-.936-2.2-2.09v-8.93c0-1.154.985-2.09 2.2-2.09h10.663c1.215 0 2.2.936 2.2 2.09v3.183L15.4 9.26V6.334c0-.607-.49-1.098-1.097-1.098H5.802c-.608 0-1.098.49-1.098 1.098v7.132c0 .608.49 1.098 1.098 1.098H10.043V8.265z"/></svg>',
+                            title: 'Ajouter un arrière-plan',
+                            toggle: true,
+                        },
+                        {
+                            name: 'small',
+                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor"/><rect x="2" y="10" width="16" height="2" rx="1" fill="currentColor"/><rect x="2" y="14" width="16" height="2" rx="1" fill="currentColor"/></svg>',
+                            title: 'Petite taille (25%)',
+                            toggle: true,
+                        },
+                        {
+                            name: 'medium',
+                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="10" height="8" rx="1" fill="currentColor"/><rect x="2" y="12" width="16" height="2" rx="1" fill="currentColor"/><rect x="2" y="16" width="16" height="2" rx="1" fill="currentColor"/></svg>',
+                            title: 'Taille moyenne (50%)',
+                            toggle: true,
+                        },
+                        {
+                            name: 'large',
+                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="16" height="10" rx="1" fill="currentColor"/><rect x="2" y="14" width="16" height="2" rx="1" fill="currentColor"/><rect x="2" y="17" width="16" height="1" rx="0.5" fill="currentColor"/></svg>',
+                            title: 'Grande taille (75%)',
+                            toggle: true,
                         },
                     ],
-                };
+                },
+            },
+            embed: {
+                class: Embed,
+                inlineToolbar: true,
+                config: {
+                    services: {
+                        youtube: true,
+                        vimeo: true,
+                    },
+                },
+            },
+            linkTool: {
+                class: LinkTool,
+                config: {
+                    endpoint: '/articles/fetch-url-metadata',
+                },
+            },
+            button: {
+                class: ButtonTool,
+                tunes: ['alignmentTune'],
+            },
+            Marker: {
+                class: CustomColorTool,
+                config: {
+                    colors: ['#FFBF00', '#FFD700', '#FFFF00'],
+                    defaultColor: '#FFBF00',
+                    icon: `<svg fill="#000000" height="20" width="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g><path d="M17.6,6L6.9,16.7c-0.2,0.2-0.3,0.4-0.3,0.6L6,23.9c0,0.3,0.1,0.6,0.3,0.8C6.5,24.9,6.7,25,7,25c0,0,0.1,0,0.1,0l6.6-0.6 c0.2,0,0.5-0.1,0.6-0.3L25,13.4L17.6,6z"></path><path d="M26.4,12l1.4-1.4c1.2-1.2,1.1-3.1-0.1-4.3l-3-3c-0.6-0.6-1.3-0.9-2.2-0.9c-0.8,0-1.6,0.3-2.2,0.9L19,4.6L26.4,12z"></path></g><g><path d="M28,29H4c-0.6,0-1-0.4-1-1s0.4-1,1-1h24c0.6,0,1,0.4,1,1S28.6,29,28,29z"></path></g></svg>`,
+                },
+            },
+            alignmentTune: {
+                class: AlignmentTuneTool,
+                config: {
+                    default: 'left',
+                    blocks: {
+                        header: 'left',
+                        list: 'left',
+                        paragraph: 'left',
+                        button: 'left',
+                    },
+                },
+            },
+            attaches: {
+                class: AttachesTool,
+                config: {
+                    endpoint: '/articles/upload-file',
+                    field: 'file',
+                    types: '*',
+                    buttonText: 'Sélectionner un fichier',
+                    errorMessage: "Erreur lors de l'upload du fichier",
+                    additionalRequestHeaders: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    },
+                },
+            },
+        },
+        data: initialData,
+        onChange: async () => {
+            const outputData = await editor.value?.save();
+            if (outputData) {
+                emit('update:content', JSON.stringify(outputData));
             }
-        }
+        },
+    });
 
-        // @ts-expect-error - EditorJS types are not fully compatible with our implementation
-        editor.value = new EditorJS({
-            holder: editorContainer.value,
-            tools: {
-                paragraph: {
-                    // @ts-expect-error - EditorJS types are not fully compatible with our implementation
-                    class: Paragraph,
-                    inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
-                    tunes: ['alignmentTune'],
-                },
-                Color: {
-                    class: ColorPlugin,
-                    config: {
-                        colorCollections: [
-                            '#EC7878',
-                            '#9C27B0',
-                            '#673AB7',
-                            '#3F51B5',
-                            '#0070FF',
-                            '#03A9F4',
-                            '#00BCD4',
-                            '#4CAF50',
-                            '#8BC34A',
-                            '#CDDC39',
-                            '#FFF',
-                        ],
-                        defaultColor: '#4E8D44',
-                        type: 'text',
-                        customPicker: true,
-                    },
-                },
-                header: {
-                    // @ts-expect-error - EditorJS types are not fully compatible with our implementation
-                    class: Header,
-                    config: {
-                        levels: [2, 3, 4, 5, 6],
-                        defaultLevel: 3,
-                    },
-                    inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
-                    tunes: ['alignmentTune'],
-                },
-                list: {
-                    // @ts-expect-error - EditorJS types are not fully compatible with our implementation
-                    class: List,
-                    inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
-                    tunes: ['alignmentTune'],
-                },
-                code: Code,
-                image: {
-                    class: ImageTool,
-                    config: {
-                        endpoints: {
-                            byFile: '/articles/upload-image',
-                        },
-                        field: 'image',
-                        types: 'image/*',
-                    },
-                },
-                embed: {
-                    class: Embed,
-                    inlineToolbar: true,
-                    config: {
-                        services: {
-                            youtube: true,
-                            vimeo: true,
-                        },
-                    },
-                },
-                linkTool: {
-                    class: LinkTool,
-                    config: {
-                        endpoint: '/articles/fetch-url-metadata',
-                    },
-                },
-                button: {
-                    class: ButtonTool,
-                    tunes: ['alignmentTune'],
-                },
-                Marker: {
-                    class: ColorPlugin,
-                    config: {
-                        colorCollections: ['#FFBF00', '#FFD700', '#FFFF00'],
-                        defaultColor: '#FFBF00',
-                        type: 'marker',
-                        customPicker: true,
-                        icon: `<svg fill="#000000" height="20" width="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g><path d="M17.6,6L6.9,16.7c-0.2,0.2-0.3,0.4-0.3,0.6L6,23.9c0,0.3,0.1,0.6,0.3,0.8C6.5,24.9,6.7,25,7,25c0,0,0.1,0,0.1,0l6.6-0.6 c0.2,0,0.5-0.1,0.6-0.3L25,13.4L17.6,6z"></path><path d="M26.4,12l1.4-1.4c1.2-1.2,1.1-3.1-0.1-4.3l-3-3c-0.6-0.6-1.3-0.9-2.2-0.9c-0.8,0-1.6,0.3-2.2,0.9L19,4.6L26.4,12z"></path></g><g><path d="M28,29H4c-0.6,0-1-0.4-1-1s0.4-1,1-1h24c0.6,0,1,0.4,1,1S28.6,29,28,29z"></path></g></svg>`,
-                    },
-                },
-                alignmentTune: {
-                    class: AlignmentTuneTool,
-                    config: {
-                        default: 'left',
-                        blocks: {
-                            header: 'left',
-                            list: 'left',
-                            paragraph: 'left',
-                            button: 'left',
-                        },
-                    },
-                },
-            },
-            data: initialData,
-            onChange: async () => {
-                const outputData = await editor.value?.save();
-                if (outputData) {
-                    emit('update:content', JSON.stringify(outputData));
-                }
-            },
-        });
-    }
+    console.log('✅ Editor initialized successfully');
+};
+
+onMounted(() => {
+    initializeEditor();
 });
+
+// Watcher pour recréer l'éditeur quand les couleurs du site changent
+watch(
+    () => props.siteColors,
+    async (newColors, oldColors) => {
+        console.log('🔄 Site colors changed!');
+        console.log('🔄 Old colors:', oldColors);
+        console.log('🔄 New colors:', newColors);
+
+        // Vérifier si les couleurs ont vraiment changé
+        if (JSON.stringify(newColors) !== JSON.stringify(oldColors) && editor.value) {
+            console.log('🔄 Colors actually changed, recreating editor...');
+
+            // Sauvegarder le contenu actuel
+            const currentData = await editor.value.save();
+
+            // Détruire l'éditeur actuel
+            editor.value.destroy();
+            editor.value = null;
+
+            // Recréer l'éditeur avec les nouvelles couleurs
+            // Attendre un tick pour s'assurer que l'ancien éditeur est complètement détruit
+            setTimeout(() => {
+                console.log('🔄 Initializing editor with new colors...');
+                initializeEditor();
+
+                // Restaurer le contenu si il y en avait un
+                if (currentData && currentData.blocks && currentData.blocks.length > 0) {
+                    editor.value?.render(currentData);
+                }
+            }, 100);
+        } else {
+            console.log('🔄 Colors unchanged or editor not ready');
+        }
+    },
+    { deep: true, immediate: true },
+);
 
 onBeforeUnmount(() => {
     if (editor.value) {
@@ -472,5 +1039,156 @@ onBeforeUnmount(() => {
 /* Surcharge potentielle des styles de la barre d'outils inline par défaut si nécessaire */
 .ce-inline-tool {
     margin: 0 2px; /* Petit espace entre les boutons inline */
+}
+
+/* Styles pour les images EditorJS */
+.image-tool--stretched .cdx-block {
+    max-width: none;
+}
+
+.image-tool--withBorder img {
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+}
+
+.image-tool--withBackground {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.image-tool--withBackground img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Styles pour les tailles d'image */
+.image-tool--small {
+    max-width: 25%;
+    margin: 0 auto;
+}
+
+.image-tool--small img {
+    width: 100%;
+    height: auto;
+}
+
+.image-tool--medium {
+    max-width: 50%;
+    margin: 0 auto;
+}
+
+.image-tool--medium img {
+    width: 100%;
+    height: auto;
+}
+
+.image-tool--large {
+    max-width: 75%;
+    margin: 0 auto;
+}
+
+.image-tool--large img {
+    width: 100%;
+    height: auto;
+}
+
+/* Combinaisons de styles */
+.image-tool--small.image-tool--withBorder img,
+.image-tool--medium.image-tool--withBorder img,
+.image-tool--large.image-tool--withBorder img {
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+}
+
+.image-tool--small.image-tool--withBackground,
+.image-tool--medium.image-tool--withBackground,
+.image-tool--large.image-tool--withBackground {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+/* Styles pour le contrôle de largeur personnalisé */
+.image-width-control {
+    margin-top: 10px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e1e5e9;
+    transition: all 0.2s ease;
+}
+
+.image-width-control:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.image-width-control label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.image-width-control input[type='range'] {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #e2e8f0;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+.image-width-control input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.image-width-control input[type='range']::-webkit-slider-thumb:hover {
+    background: #2563eb;
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.image-width-control input[type='range']::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.image-width-control input[type='range']::-moz-range-thumb:hover {
+    background: #2563eb;
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.image-width-control .slider-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.image-width-control .value-display {
+    font-size: 14px;
+    color: #6b7280;
+    font-weight: 500;
+    min-width: 40px;
+    text-align: right;
 }
 </style>

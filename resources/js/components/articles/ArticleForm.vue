@@ -54,9 +54,31 @@
                     </div>
 
                     <div class="space-y-2">
-                        <Label for="featured_image_url">Featured Image URL</Label>
-                        <Input id="featured_image_url" v-model="form.featured_image_url" type="url" :disabled="form.processing" />
-                        <InputError :message="form.errors.featured_image_url" />
+                        <Label for="cover_image">Cover Image</Label>
+                        <div class="space-y-3">
+                            <!-- Prévisualisation de l'image actuelle -->
+                            <div v-if="currentCoverImageUrl" class="relative">
+                                <img :src="currentCoverImageUrl" alt="Cover image preview" class="h-32 w-full rounded-lg border object-cover" />
+                                <Button type="button" variant="destructive" size="sm" class="absolute top-2 right-2" @click="removeCoverImage">
+                                    ✕
+                                </Button>
+                            </div>
+
+                            <!-- Upload d'image -->
+                            <div class="flex items-center gap-3">
+                                <input ref="coverImageInput" type="file" accept="image/*" class="hidden" @change="handleCoverImageUpload" />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    @click="coverImageInput?.click()"
+                                    :disabled="form.processing || uploadingCoverImage"
+                                >
+                                    {{ uploadingCoverImage ? 'Uploading...' : 'Choose Image' }}
+                                </Button>
+                                <span class="text-sm text-gray-500">Max 2MB, JPG/PNG</span>
+                            </div>
+                        </div>
+                        <InputError :message="form.errors.cover_image" />
                     </div>
 
                     <div class="space-y-2">
@@ -83,7 +105,10 @@
                     <div class="space-y-4">
                         <div class="space-y-2">
                             <Label for="categories">Categories</Label>
-                            <div v-if="selectedSiteValues.length === 0" class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                            <div
+                                v-if="selectedSiteValues.length === 0"
+                                class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600"
+                            >
                                 Sélectionnez d'abord un site pour voir les catégories disponibles
                             </div>
                             <MultiSelect
@@ -152,6 +177,7 @@
                 <div class="rounded-lg border">
                     <EditorJS
                         :initial-content="form.content"
+                        :site-colors="siteColors"
                         @update:content="handleContentUpdate"
                         :disabled="form.processing"
                         class="min-h-[400px]"
@@ -173,37 +199,20 @@
 import EditorJS from '@/components/Editor/EditorJS.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
-import {
-    Combobox,
-    ComboboxAnchor,
-    ComboboxEmpty,
-    ComboboxGroup,
-    ComboboxInput,
-    ComboboxItem,
-    ComboboxItemIndicator,
-    ComboboxList,
-    ComboboxTrigger,
-} from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import MultiSelect from '@/components/ui/MultiSelect.vue';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import MultiSelect from '@/components/ui/MultiSelect.vue';
-import { useRoutes } from '@/composables/useRoutes';
 import { useEditorJSConverter } from '@/composables/useEditorJSConverter';
+import { useRoutes } from '@/composables/useRoutes';
 import { useForm } from '@inertiajs/vue3';
 import axios from 'axios';
-import { Check, ChevronsUpDown } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface Category {
     id: number;
     name: string;
-}
-
-interface CategoryOption {
-    value: string;
-    label: string;
 }
 
 interface Article {
@@ -212,7 +221,7 @@ interface Article {
     excerpt: string;
     content: string;
     content_html: string;
-    featured_image_url: string;
+    cover_image_path?: string;
     status: string;
     scheduled_at?: string;
     meta_title: string;
@@ -234,7 +243,7 @@ const props = defineProps<{
 const emit = defineEmits(['close']);
 
 const { articleRoutes, siteRoutes } = useRoutes();
-const { convertForWebhook, convertToHTML, convertHTMLToEditorJS } = useEditorJSConverter();
+const { convertForWebhook, convertHTMLToEditorJS } = useEditorJSConverter();
 
 // Déclarations des refs AVANT les watchers
 const siteColors = ref({
@@ -246,13 +255,17 @@ const siteColors = ref({
 const selectedSiteValues = ref<string[]>([]);
 const selectedCategoryValues = ref<string[]>([]);
 const availableCategories = ref<Category[]>([]);
+const uploadingCoverImage = ref(false);
+const currentCoverImageUrl = ref<string>('');
+const coverImageInput = ref<HTMLInputElement>();
 
 const form = useForm({
     title: '',
     excerpt: '',
     content: '',
     content_html: '',
-    featured_image_url: '',
+    cover_image_path: '',
+    cover_image: null as File | null,
     status: 'draft',
     scheduled_at: undefined as string | undefined,
     categories: [] as number[],
@@ -329,31 +342,31 @@ const fetchSiteCategories = async (siteId: any) => {
 
 const handleContentUpdate = (content: string) => {
     console.log('🔥 handleContentUpdate called with:', content ? content.substring(0, 200) + '...' : 'empty content');
-    
+
     form.content = content;
-    
+
     // Convertir immédiatement en HTML
     if (content) {
         try {
             console.log('🔄 Attempting to parse content...');
             const editorJSData = typeof content === 'string' ? JSON.parse(content) : content;
             console.log('✅ Parsed EditorJS data:', JSON.stringify(editorJSData, null, 2));
-            
+
             // Vérifier la structure des blocs
             if (editorJSData.blocks) {
                 console.log('📦 Blocks found:', editorJSData.blocks.length);
                 editorJSData.blocks.forEach((block: any, index: number) => {
                     console.log(`Block ${index}:`, {
                         type: block.type,
-                        data: block.data
+                        data: block.data,
                     });
                 });
             }
-            
+
             console.log('🔄 Converting to HTML...');
             const htmlResult = convertForWebhook(editorJSData);
             console.log('✅ HTML conversion result:', htmlResult);
-            
+
             form.content_html = htmlResult;
             console.log('✅ form.content_html updated:', form.content_html.substring(0, 100) + '...');
         } catch (error) {
@@ -363,6 +376,47 @@ const handleContentUpdate = (content: string) => {
     } else {
         console.log('⚠️ Content is empty, clearing content_html');
         form.content_html = '';
+    }
+};
+
+const handleCoverImageUpload = async (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+
+    if (!file) return;
+
+    // Vérifier la taille du fichier (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+        alert('File size must be less than 2MB');
+        return;
+    }
+
+    uploadingCoverImage.value = true;
+
+    try {
+        // Créer une prévisualisation immédiate
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            currentCoverImageUrl.value = e.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+
+        // Stocker le fichier dans le form
+        form.cover_image = file;
+    } catch (error) {
+        console.error('Error uploading cover image:', error);
+        alert('Error uploading image');
+    } finally {
+        uploadingCoverImage.value = false;
+    }
+};
+
+const removeCoverImage = () => {
+    currentCoverImageUrl.value = '';
+    form.cover_image = null;
+    form.cover_image_path = '';
+    if (coverImageInput.value) {
+        coverImageInput.value.value = '';
     }
 };
 
@@ -383,7 +437,7 @@ watch(
         if (newArticle && 'id' in newArticle) {
             form.title = newArticle.title;
             form.excerpt = newArticle.excerpt;
-            
+
             // Gestion du contenu : priorité à EditorJS, sinon conversion depuis HTML
             if (newArticle.content) {
                 // Si on a du contenu EditorJS, l'utiliser directement
@@ -395,9 +449,14 @@ watch(
             } else {
                 form.content = '';
             }
-            
+
             form.content_html = newArticle.content_html || '';
-            form.featured_image_url = newArticle.featured_image_url;
+            form.cover_image_path = newArticle.cover_image_path || '';
+
+            // Afficher l'image de couverture existante
+            if (newArticle.cover_image_path) {
+                currentCoverImageUrl.value = `/storage/${newArticle.cover_image_path}`;
+            }
             form.meta_title = newArticle.meta_title;
             form.meta_description = newArticle.meta_description;
             form.meta_keywords = newArticle.meta_keywords;
@@ -437,7 +496,7 @@ const submit = () => {
     console.log('🚀 Submit called');
     console.log('📝 form.content:', form.content ? form.content.substring(0, 200) + '...' : 'empty');
     console.log('🌐 form.content_html BEFORE conversion:', form.content_html ? form.content_html.substring(0, 200) + '...' : 'empty');
-    
+
     // Convertir le contenu EditorJS en HTML avant l'envoi
     if (form.content) {
         try {
@@ -454,7 +513,8 @@ const submit = () => {
         title: form.title,
         content: form.content ? 'has content' : 'empty',
         content_html: form.content_html ? 'has html' : 'empty',
-        site_id: form.site_id
+        site_id: form.site_id,
+        cover_image: form.cover_image ? 'has file' : 'no file',
     });
 
     if (isEditing.value && props.article && props.article.id) {
@@ -484,7 +544,7 @@ watch(
             form.content_html = '';
         }
     },
-    { deep: true }
+    { deep: true },
 );
 
 // Watch pour gérer les changements de site
@@ -494,12 +554,12 @@ watch(
         if (newSiteValues.length > 0) {
             const siteId = newSiteValues[0];
             form.site_id = siteId;
-            
+
             // Reset categories when changing site
             form.categories = [];
             availableCategories.value = [];
             selectedCategoryValues.value = [];
-            
+
             await Promise.all([fetchSiteColors(siteId), fetchSiteCategories(siteId)]);
         } else {
             form.site_id = '';
@@ -508,7 +568,7 @@ watch(
             selectedCategoryValues.value = [];
         }
     },
-    { deep: true }
+    { deep: true },
 );
 
 // Watch pour synchroniser les changements du multiselect avec le form

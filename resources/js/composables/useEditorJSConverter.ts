@@ -24,10 +24,12 @@ export function useEditorJSConverter() {
             return '<hr>';
         },
         table: (data: any) => {
-            const rows = data.content.map((row: string[]) => {
-                const cells = row.map(cell => `<td>${cell}</td>`).join('');
-                return `<tr>${cells}</tr>`;
-            }).join('');
+            const rows = data.content
+                .map((row: string[]) => {
+                    const cells = row.map((cell) => `<td>${cell}</td>`).join('');
+                    return `<tr>${cells}</tr>`;
+                })
+                .join('');
             return `<table><tbody>${rows}</tbody></table>`;
         },
         image: (data: any) => {
@@ -47,12 +49,14 @@ export function useEditorJSConverter() {
             return `<div class="warning"><h4>${data.title}</h4><p>${data.message}</p></div>`;
         },
         checklist: (data: any) => {
-            const items = data.items.map((item: any) => {
-                const checked = item.checked ? 'checked' : '';
-                return `<li><input type="checkbox" ${checked} disabled> ${item.text}</li>`;
-            }).join('');
+            const items = data.items
+                .map((item: any) => {
+                    const checked = item.checked ? 'checked' : '';
+                    return `<li><input type="checkbox" ${checked} disabled> ${item.text}</li>`;
+                })
+                .join('');
             return `<ul class="checklist">${items}</ul>`;
-        }
+        },
     });
 
     /**
@@ -112,10 +116,12 @@ export function useEditorJSConverter() {
 
                     case 'table':
                         if (block.data.content && Array.isArray(block.data.content)) {
-                            const rows = block.data.content.map((row: string[]) => {
-                                const cells = row.map(cell => `<td>${cell}</td>`).join('');
-                                return `<tr>${cells}</tr>`;
-                            }).join('');
+                            const rows = block.data.content
+                                .map((row: string[]) => {
+                                    const cells = row.map((cell) => `<td>${cell}</td>`).join('');
+                                    return `<tr>${cells}</tr>`;
+                                })
+                                .join('');
                             htmlParts.push(`<table><tbody>${rows}</tbody></table>`);
                         }
                         break;
@@ -131,7 +137,9 @@ export function useEditorJSConverter() {
                         if (block.data.embed) {
                             const width = block.data.width || '100%';
                             const height = block.data.height || '315';
-                            htmlParts.push(`<div class="embed"><iframe src="${block.data.embed}" width="${width}" height="${height}"></iframe></div>`);
+                            htmlParts.push(
+                                `<div class="embed"><iframe src="${block.data.embed}" width="${width}" height="${height}"></iframe></div>`,
+                            );
                         }
                         break;
 
@@ -158,10 +166,12 @@ export function useEditorJSConverter() {
 
                     case 'checklist':
                         if (block.data.items && Array.isArray(block.data.items)) {
-                            const items = block.data.items.map((item: any) => {
-                                const checked = item.checked ? 'checked' : '';
-                                return `<li><input type="checkbox" ${checked} disabled> ${item.text}</li>`;
-                            }).join('');
+                            const items = block.data.items
+                                .map((item: any) => {
+                                    const checked = item.checked ? 'checked' : '';
+                                    return `<li><input type="checkbox" ${checked} disabled> ${item.text}</li>`;
+                                })
+                                .join('');
                             htmlParts.push(`<ul class="checklist">${items}</ul>`);
                         }
                         break;
@@ -208,7 +218,7 @@ export function useEditorJSConverter() {
             }
 
             const htmlResult = edjsParser.parse(editorJSData);
-            
+
             // Vérifier si le résultat est un tableau ou une chaîne
             if (Array.isArray(htmlResult)) {
                 return htmlResult.join('');
@@ -228,19 +238,139 @@ export function useEditorJSConverter() {
      * Nettoie le HTML pour le webhook (supprime les styles inline si nécessaire)
      */
     const cleanHTMLForWebhook = (html: string): string => {
-        // Optionnel : nettoyer les styles inline ou autres éléments non désirés
-        return html
-            .replace(/<font[^>]*>/g, '') // Supprimer les balises font
-            .replace(/<\/font>/g, '')
-            .replace(/style="[^"]*"/g, ''); // Supprimer les styles inline
+        console.log('🧹 Cleaning HTML input:', html);
+
+        // Préserver les couleurs mais supprimer les autres styles inline
+        let result = html
+            // Convertir les balises font avec couleur en span avec style
+            .replace(/<font([^>]*style="[^"]*"[^>]*)>/g, (match, attributes) => {
+                console.log('🎨 Found font tag:', match);
+                console.log('🎨 Attributes:', attributes);
+
+                // Extraire le style de la balise font
+                const styleMatch = attributes.match(/style="([^"]*)"/);
+                if (styleMatch) {
+                    const styleContent = styleMatch[1];
+                    console.log('🎨 Style content:', styleContent);
+
+                    const colorStyles = [];
+                    const styles = styleContent.split(';');
+
+                    for (const style of styles) {
+                        const trimmedStyle = style.trim();
+                        if (trimmedStyle.includes('color:') || trimmedStyle.includes('background-color:') || trimmedStyle.includes('background:')) {
+                            colorStyles.push(trimmedStyle);
+                        }
+                    }
+
+                    console.log('🎨 Color styles found:', colorStyles);
+
+                    if (colorStyles.length > 0) {
+                        const result = `<span style="${colorStyles.join('; ')}">`;
+                        console.log('🎨 Converted to:', result);
+                        return result;
+                    }
+                }
+                return '<span>';
+            })
+            // Remplacer les balises font de fermeture par span
+            .replace(/<\/font>/g, '</span>')
+            // Supprimer les balises font restantes (sans couleur)
+            .replace(/<font[^>]*>/g, '')
+            // Préserver les styles de couleur et background-color, supprimer le reste
+            .replace(/style="([^"]*)"/g, (match, styleContent) => {
+                // Extraire seulement les propriétés de couleur
+                const colorStyles = [];
+                const styles = styleContent.split(';');
+
+                for (const style of styles) {
+                    const trimmedStyle = style.trim();
+                    if (trimmedStyle.includes('color:') || trimmedStyle.includes('background-color:') || trimmedStyle.includes('background:')) {
+                        colorStyles.push(trimmedStyle);
+                    }
+                }
+
+                // Si on a des styles de couleur, les conserver
+                if (colorStyles.length > 0) {
+                    return `style="${colorStyles.join('; ')}"`;
+                }
+
+                // Sinon, supprimer l'attribut style
+                return '';
+            });
+
+        // Nettoyer les spans de couleur imbriqués
+        result = cleanNestedColorSpans(result);
+
+        console.log('🧹 Cleaning HTML result:', result);
+        return result;
+    };
+
+    // Fonction pour nettoyer les spans de couleur imbriqués
+    const cleanNestedColorSpans = (html: string): string => {
+        console.log('🔧 Cleaning nested spans input:', html);
+
+        // Créer un élément DOM temporaire pour parser le HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+
+        // Fonction récursive pour nettoyer les spans imbriqués
+        const cleanElement = (element: Element): void => {
+            const children = Array.from(element.children);
+
+            for (const child of children) {
+                if (child.tagName === 'SPAN' && child.hasAttribute('style')) {
+                    // Vérifier si ce span a des spans enfants avec des couleurs
+                    const colorSpanChildren = Array.from(child.children).filter(
+                        (grandChild) => grandChild.tagName === 'SPAN' && grandChild.hasAttribute('style'),
+                    );
+
+                    if (colorSpanChildren.length > 0) {
+                        // Il y a des spans de couleur imbriqués
+                        // Prendre la couleur du span le plus profond (le dernier appliqué)
+                        const deepestSpan = colorSpanChildren[colorSpanChildren.length - 1] as HTMLElement;
+                        const deepestColor = deepestSpan.style.color;
+
+                        if (deepestColor) {
+                            // Extraire tout le texte du span parent
+                            const textContent = child.textContent || '';
+
+                            // Remplacer le span parent par un span simple avec la couleur la plus profonde
+                            const newSpan = document.createElement('span');
+                            newSpan.style.color = deepestColor;
+                            newSpan.textContent = textContent;
+
+                            child.parentNode?.replaceChild(newSpan, child);
+                            continue;
+                        }
+                    }
+                }
+
+                // Continuer récursivement pour les autres éléments
+                cleanElement(child);
+            }
+        };
+
+        cleanElement(tempDiv);
+
+        const result = tempDiv.innerHTML;
+        console.log('🔧 Cleaning nested spans result:', result);
+        return result;
     };
 
     /**
      * Convertit et nettoie le contenu pour l'envoi via webhook
      */
     const convertForWebhook = (editorJSData: any): string => {
+        console.log('🔄 Converting for webhook, input data:', editorJSData);
+
         const html = convertToHTML(editorJSData);
-        return cleanHTMLForWebhook(html);
+        console.log('🔄 HTML before cleaning:', html);
+
+        const cleanedHtml = cleanHTMLForWebhook(html);
+        console.log('🔄 HTML after cleaning:', cleanedHtml);
+
+        return cleanedHtml;
     };
 
     /**
@@ -252,7 +382,7 @@ export function useEditorJSConverter() {
                 return {
                     time: Date.now(),
                     blocks: [],
-                    version: "2.31.0"
+                    version: '2.31.0',
                 };
             }
 
@@ -275,8 +405,8 @@ export function useEditorJSConverter() {
                                 id: `block_${blockId++}`,
                                 type: 'paragraph',
                                 data: {
-                                    text: element.innerHTML
-                                }
+                                    text: element.innerHTML,
+                                },
                             });
                         }
                         break;
@@ -292,22 +422,22 @@ export function useEditorJSConverter() {
                             type: 'header',
                             data: {
                                 text: element.innerHTML,
-                                level: parseInt(tagName.charAt(1))
-                            }
+                                level: parseInt(tagName.charAt(1)),
+                            },
                         });
                         break;
 
                     case 'ul':
                     case 'ol':
-                        const listItems = Array.from(element.querySelectorAll('li')).map(li => li.innerHTML);
+                        const listItems = Array.from(element.querySelectorAll('li')).map((li) => li.innerHTML);
                         if (listItems.length > 0) {
                             blocks.push({
                                 id: `block_${blockId++}`,
                                 type: 'list',
                                 data: {
                                     style: tagName === 'ol' ? 'ordered' : 'unordered',
-                                    items: listItems
-                                }
+                                    items: listItems,
+                                },
                             });
                         }
                         break;
@@ -321,8 +451,8 @@ export function useEditorJSConverter() {
                             data: {
                                 text: quoteText,
                                 caption: citation,
-                                alignment: 'left'
-                            }
+                                alignment: 'left',
+                            },
                         });
                         break;
 
@@ -333,8 +463,8 @@ export function useEditorJSConverter() {
                                 id: `block_${blockId++}`,
                                 type: 'code',
                                 data: {
-                                    code: codeElement.textContent || ''
-                                }
+                                    code: codeElement.textContent || '',
+                                },
                             });
                         }
                         break;
@@ -343,7 +473,7 @@ export function useEditorJSConverter() {
                         blocks.push({
                             id: `block_${blockId++}`,
                             type: 'delimiter',
-                            data: {}
+                            data: {},
                         });
                         break;
 
@@ -356,29 +486,27 @@ export function useEditorJSConverter() {
                                 type: 'image',
                                 data: {
                                     file: {
-                                        url: img.src
+                                        url: img.src,
                                     },
                                     caption: figcaption?.textContent || img.alt || '',
                                     withBorder: false,
                                     stretched: false,
-                                    withBackground: false
-                                }
+                                    withBackground: false,
+                                },
                             });
                         }
                         break;
 
                     case 'table':
                         const rows = Array.from(element.querySelectorAll('tr'));
-                        const tableContent = rows.map(row => 
-                            Array.from(row.querySelectorAll('td, th')).map(cell => cell.innerHTML)
-                        );
+                        const tableContent = rows.map((row) => Array.from(row.querySelectorAll('td, th')).map((cell) => cell.innerHTML));
                         if (tableContent.length > 0) {
                             blocks.push({
                                 id: `block_${blockId++}`,
                                 type: 'table',
                                 data: {
-                                    content: tableContent
-                                }
+                                    content: tableContent,
+                                },
                             });
                         }
                         break;
@@ -390,8 +518,8 @@ export function useEditorJSConverter() {
                                 id: `block_${blockId++}`,
                                 type: 'raw',
                                 data: {
-                                    html: element.outerHTML
-                                }
+                                    html: element.outerHTML,
+                                },
                             });
                         }
                         break;
@@ -404,29 +532,30 @@ export function useEditorJSConverter() {
                     id: `block_${blockId++}`,
                     type: 'paragraph',
                     data: {
-                        text: html
-                    }
+                        text: html,
+                    },
                 });
             }
 
             return {
                 time: Date.now(),
                 blocks: blocks,
-                version: "2.31.0"
+                version: '2.31.0',
             };
-
         } catch (error) {
             console.error('Erreur lors de la conversion HTML vers EditorJS:', error);
             return {
                 time: Date.now(),
-                blocks: [{
-                    id: 'error_block',
-                    type: 'paragraph',
-                    data: {
-                        text: 'Erreur lors du chargement du contenu'
-                    }
-                }],
-                version: "2.31.0"
+                blocks: [
+                    {
+                        id: 'error_block',
+                        type: 'paragraph',
+                        data: {
+                            text: 'Erreur lors du chargement du contenu',
+                        },
+                    },
+                ],
+                version: '2.31.0',
             };
         }
     };
@@ -435,6 +564,6 @@ export function useEditorJSConverter() {
         convertToHTML,
         cleanHTMLForWebhook,
         convertForWebhook,
-        convertHTMLToEditorJS
+        convertHTMLToEditorJS,
     };
-} 
+}
