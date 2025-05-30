@@ -71,126 +71,9 @@ export function useEditorJSConverter() {
             const htmlParts: string[] = [];
 
             editorJSData.blocks.forEach((block: any) => {
-                if (!block.type || !block.data) {
-                    return;
-                }
-
-                switch (block.type) {
-                    case 'paragraph':
-                        if (block.data.text) {
-                            htmlParts.push(`<p>${block.data.text}</p>`);
-                        }
-                        break;
-
-                    case 'header':
-                        if (block.data.text && block.data.level) {
-                            const level = Math.min(Math.max(1, block.data.level), 6);
-                            htmlParts.push(`<h${level}>${block.data.text}</h${level}>`);
-                        }
-                        break;
-
-                    case 'list':
-                        if (block.data.items && Array.isArray(block.data.items)) {
-                            const listTag = block.data.style === 'ordered' ? 'ol' : 'ul';
-                            const items = block.data.items.map((item: string) => `<li>${item}</li>`).join('');
-                            htmlParts.push(`<${listTag}>${items}</${listTag}>`);
-                        }
-                        break;
-
-                    case 'quote':
-                        if (block.data.text) {
-                            const caption = block.data.caption ? `<cite>${block.data.caption}</cite>` : '';
-                            htmlParts.push(`<blockquote><p>${block.data.text}</p>${caption}</blockquote>`);
-                        }
-                        break;
-
-                    case 'code':
-                        if (block.data.code) {
-                            htmlParts.push(`<pre><code>${block.data.code}</code></pre>`);
-                        }
-                        break;
-
-                    case 'delimiter':
-                        htmlParts.push('<hr>');
-                        break;
-
-                    case 'table':
-                        if (block.data.content && Array.isArray(block.data.content)) {
-                            const rows = block.data.content
-                                .map((row: string[]) => {
-                                    const cells = row.map((cell) => `<td>${cell}</td>`).join('');
-                                    return `<tr>${cells}</tr>`;
-                                })
-                                .join('');
-                            htmlParts.push(`<table><tbody>${rows}</tbody></table>`);
-                        }
-                        break;
-
-                    case 'image':
-                        if (block.data.file && block.data.file.url) {
-                            const caption = block.data.caption ? `<figcaption>${block.data.caption}</figcaption>` : '';
-                            htmlParts.push(`<figure><img src="${block.data.file.url}" alt="${block.data.caption || ''}">${caption}</figure>`);
-                        }
-                        break;
-
-                    case 'embed':
-                        if (block.data.embed) {
-                            const width = block.data.width || '100%';
-                            const height = block.data.height || '315';
-                            htmlParts.push(
-                                `<div class="embed"><iframe src="${block.data.embed}" width="${width}" height="${height}"></iframe></div>`,
-                            );
-                        }
-                        break;
-
-                    case 'linkTool':
-                        if (block.data.link) {
-                            const title = block.data.meta?.title || block.data.link;
-                            htmlParts.push(`<a href="${block.data.link}" target="_blank">${title}</a>`);
-                        }
-                        break;
-
-                    case 'raw':
-                        if (block.data.html) {
-                            htmlParts.push(block.data.html);
-                        }
-                        break;
-
-                    case 'warning':
-                        if (block.data.title || block.data.message) {
-                            const title = block.data.title ? `<h4>${block.data.title}</h4>` : '';
-                            const message = block.data.message ? `<p>${block.data.message}</p>` : '';
-                            htmlParts.push(`<div class="warning">${title}${message}</div>`);
-                        }
-                        break;
-
-                    case 'checklist':
-                        if (block.data.items && Array.isArray(block.data.items)) {
-                            const items = block.data.items
-                                .map((item: any) => {
-                                    const checked = item.checked ? 'checked' : '';
-                                    return `<li><input type="checkbox" ${checked} disabled> ${item.text}</li>`;
-                                })
-                                .join('');
-                            htmlParts.push(`<ul class="checklist">${items}</ul>`);
-                        }
-                        break;
-
-                    case 'button':
-                        if (block.data.text) {
-                            const link = block.data.link ? ` href="${block.data.link}"` : '';
-                            const style = block.data.style || 'primary';
-                            htmlParts.push(`<a${link} class="button button--${style}">${block.data.text}</a>`);
-                        }
-                        break;
-
-                    default:
-                        console.warn(`Type de bloc non supporté: ${block.type}`, block.data);
-                        // Essayer de récupérer du texte si possible
-                        if (block.data.text) {
-                            htmlParts.push(`<p>${block.data.text}</p>`);
-                        }
-                        break;
+                const blockHtml = convertBlockToHTML(block);
+                if (blockHtml) {
+                    htmlParts.push(blockHtml);
                 }
             });
 
@@ -199,6 +82,197 @@ export function useEditorJSConverter() {
             console.error('Erreur lors de la conversion personnalisée EditorJS vers HTML:', error);
             return '';
         }
+    };
+
+    /**
+     * Convertit un block EditorJS individuel en HTML
+     */
+    const convertBlockToHTML = (block: any): string => {
+        if (!block.type || !block.data) {
+            return '';
+        }
+
+        switch (block.type) {
+            case 'paragraph':
+                if (block.data.text) {
+                    return `<p>${block.data.text}</p>`;
+                }
+                break;
+
+            case 'header':
+                if (block.data.text && block.data.level) {
+                    const level = Math.min(Math.max(1, block.data.level), 6);
+                    return `<h${level}>${block.data.text}</h${level}>`;
+                }
+                break;
+
+            case 'list':
+                if (block.data.items && Array.isArray(block.data.items)) {
+                    const listTag = block.data.style === 'ordered' ? 'ol' : 'ul';
+                    const items = block.data.items.map((item: string) => `<li>${item}</li>`).join('');
+                    return `<${listTag}>${items}</${listTag}>`;
+                }
+                break;
+
+            case 'quote':
+                if (block.data.text) {
+                    const caption = block.data.caption ? `<cite>${block.data.caption}</cite>` : '';
+                    return `<blockquote><p>${block.data.text}</p>${caption}</blockquote>`;
+                }
+                break;
+
+            case 'code':
+                if (block.data.code) {
+                    return `<pre><code>${block.data.code}</code></pre>`;
+                }
+                break;
+
+            case 'delimiter':
+                return '<hr>';
+
+            case 'table':
+                if (block.data.content && Array.isArray(block.data.content)) {
+                    const rows = block.data.content
+                        .map((row: string[]) => {
+                            const cells = row.map((cell) => `<td>${cell}</td>`).join('');
+                            return `<tr>${cells}</tr>`;
+                        })
+                        .join('');
+                    return `<table><tbody>${rows}</tbody></table>`;
+                }
+                break;
+
+            case 'image':
+                if (block.data.file && block.data.file.url) {
+                    const caption = block.data.caption ? `<figcaption>${block.data.caption}</figcaption>` : '';
+                    const alt = block.data.caption || '';
+                    return `<figure><img src="${block.data.file.url}" alt="${alt}">${caption}</figure>`;
+                }
+                break;
+
+            case 'embed':
+                if (block.data.embed) {
+                    const width = block.data.width || '100%';
+                    const height = block.data.height || '315';
+                    return `<div class="embed"><iframe src="${block.data.embed}" width="${width}" height="${height}"></iframe></div>`;
+                }
+                break;
+
+            case 'linkTool':
+                if (block.data.link) {
+                    const title = block.data.meta?.title || block.data.link;
+                    return `<a href="${block.data.link}" target="_blank">${title}</a>`;
+                }
+                break;
+
+            case 'raw':
+                if (block.data.html) {
+                    return block.data.html;
+                }
+                break;
+
+            case 'warning':
+                if (block.data.title || block.data.message) {
+                    const title = block.data.title ? `<h4>${block.data.title}</h4>` : '';
+                    const message = block.data.message ? `<p>${block.data.message}</p>` : '';
+                    return `<div class="warning">${title}${message}</div>`;
+                }
+                break;
+
+            case 'checklist':
+                if (block.data.items && Array.isArray(block.data.items)) {
+                    const items = block.data.items
+                        .map((item: any) => {
+                            const checked = item.checked ? 'checked' : '';
+                            return `<li><input type="checkbox" ${checked} disabled> ${item.text}</li>`;
+                        })
+                        .join('');
+                    return `<ul class="checklist">${items}</ul>`;
+                }
+                break;
+
+            case 'button':
+                if (block.data.text) {
+                    const link = block.data.link ? ` href="${block.data.link}"` : '';
+                    const style = block.data.style || 'primary';
+                    return `<a${link} class="button button--${style}">${block.data.text}</a>`;
+                }
+                break;
+
+            case 'attaches':
+                if (block.data.file) {
+                    const fileName = block.data.title || block.data.file.name || 'Fichier téléchargé';
+                    const fileSize = block.data.file.size ? ` (${Math.round(block.data.file.size / 1024)} KB)` : '';
+                    return `
+                        <div class="attachment">
+                            <a href="${block.data.file.url}" download="${fileName}" class="attachment-link">
+                                📎 ${fileName}${fileSize}
+                            </a>
+                        </div>
+                    `;
+                }
+                break;
+
+            case 'columns':
+                if (block.data.columns && Array.isArray(block.data.columns)) {
+                    const layout = block.data.layout || '2-cols';
+                    const columnClasses = {
+                        '2-cols': 'grid grid-cols-1 md:grid-cols-2 gap-4',
+                        '3-cols': 'grid grid-cols-1 md:grid-cols-3 gap-4',
+                        '2-1': 'grid grid-cols-1 md:grid-cols-3 gap-4', // 2/3 + 1/3
+                        '1-2': 'grid grid-cols-1 md:grid-cols-3 gap-4', // 1/3 + 2/3
+                    };
+
+                    const gridClass = columnClasses[layout as keyof typeof columnClasses] || columnClasses['2-cols'];
+
+                    const columnsHtml = block.data.columns
+                        .map((column: any, index: number) => {
+                            let colSpanClass = '';
+
+                            // Gérer les classes col-span pour les layouts asymétriques
+                            if (layout === '2-1') {
+                                colSpanClass = index === 0 ? 'md:col-span-2' : 'md:col-span-1';
+                            } else if (layout === '1-2') {
+                                colSpanClass = index === 0 ? 'md:col-span-1' : 'md:col-span-2';
+                            }
+
+                            // Traiter le contenu de la colonne
+                            let columnContent = '';
+                            if (column.blocks && Array.isArray(column.blocks)) {
+                                // Nouvelle structure avec blocks EditorJS
+                                columnContent = column.blocks
+                                    .map((columnBlock: any) => {
+                                        // Récursivement convertir chaque block de la colonne
+                                        return convertBlockToHTML(columnBlock);
+                                    })
+                                    .join('\n');
+                            } else if (column.content) {
+                                // Ancienne structure avec simple contenu texte
+                                columnContent = column.content;
+                            }
+
+                            return `<div class="column ${colSpanClass}">
+                            <div class="prose max-w-none">
+                                ${columnContent}
+                            </div>
+                        </div>`;
+                        })
+                        .join('');
+
+                    return `<div class="columns-block ${gridClass}">${columnsHtml}</div>`;
+                }
+                break;
+
+            default:
+                console.warn(`Type de bloc non supporté: ${block.type}`, block.data);
+                // Essayer de récupérer du texte si possible
+                if (block.data.text) {
+                    return `<p>${block.data.text}</p>`;
+                }
+                break;
+        }
+
+        return '';
     };
 
     /**
@@ -506,6 +580,69 @@ export function useEditorJSConverter() {
                                 type: 'table',
                                 data: {
                                     content: tableContent,
+                                },
+                            });
+                        }
+                        break;
+
+                    case 'div':
+                        // Gérer les blocks de colonnes
+                        if (element.classList.contains('columns-block')) {
+                            const columns = Array.from(element.querySelectorAll('.column')).map((col) => {
+                                const proseContent = col.querySelector('.prose');
+                                return {
+                                    content: proseContent ? proseContent.innerHTML : col.innerHTML,
+                                    width: 50, // Valeur par défaut, sera ajustée selon le layout
+                                };
+                            });
+
+                            // Déterminer le layout basé sur les classes CSS
+                            let layout = '2-cols';
+                            if (element.classList.contains('md:grid-cols-3')) {
+                                const firstColumn = element.querySelector('.column');
+                                if (firstColumn?.classList.contains('md:col-span-2')) {
+                                    layout = '2-1';
+                                } else if (element.querySelectorAll('.column')[1]?.classList.contains('md:col-span-2')) {
+                                    layout = '1-2';
+                                } else {
+                                    layout = '3-cols';
+                                }
+                            }
+
+                            blocks.push({
+                                id: `block_${blockId++}`,
+                                type: 'columns',
+                                data: {
+                                    columns: columns,
+                                    layout: layout,
+                                },
+                            });
+                        }
+                        // Gérer les attachements
+                        else if (element.classList.contains('attachment')) {
+                            const link = element.querySelector('a');
+                            if (link) {
+                                const fileName = link.textContent?.replace('📎 ', '').split('(')[0].trim() || 'Fichier';
+                                blocks.push({
+                                    id: `block_${blockId++}`,
+                                    type: 'attaches',
+                                    data: {
+                                        file: {
+                                            url: link.href,
+                                            name: fileName,
+                                        },
+                                        title: fileName,
+                                    },
+                                });
+                            }
+                        }
+                        // Pour les autres divs, traiter comme HTML brut
+                        else if (textContent.trim()) {
+                            blocks.push({
+                                id: `block_${blockId++}`,
+                                type: 'raw',
+                                data: {
+                                    html: element.outerHTML,
                                 },
                             });
                         }

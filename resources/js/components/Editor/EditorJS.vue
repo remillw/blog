@@ -220,17 +220,79 @@ class CustomImageTool extends ImageTool {
             font-weight: 500;
         `;
 
+        // Créer le champ alt text
+        const altLabel = document.createElement('label');
+        altLabel.textContent = 'Texte alternatif (Alt):';
+        altLabel.style.cssText = `
+            display: block;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        `;
+
+        const altInput = document.createElement('input');
+        altInput.type = 'text';
+        altInput.placeholder = "Décrivez cette image pour l'accessibilité...";
+        altInput.style.cssText = `
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        `;
+
+        // Récupérer la valeur alt existante si elle existe
+        const imageElement = wrapper.querySelector('img');
+        if (imageElement && imageElement.alt) {
+            altInput.value = imageElement.alt;
+        }
+
         // Gestionnaire d'événement pour le slider
         slider.addEventListener('input', (e) => {
             const value = (e.target as HTMLInputElement).value;
             valueDisplay.textContent = `${value}%`;
 
-            // Appliquer la largeur à l'image
-            const imageWrapper = wrapper.querySelector('.cdx-block');
-            if (imageWrapper) {
-                imageWrapper.style.maxWidth = `${value}%`;
-                imageWrapper.style.margin = '0 auto';
+            // Appliquer la largeur à l'image - chercher le bon conteneur
+            const currentImageElement = wrapper.querySelector('img');
+            const imageContainer = wrapper.querySelector('.image-tool') || wrapper.querySelector('.cdx-block') || wrapper;
+
+            if (currentImageElement && imageContainer) {
+                // Appliquer la largeur au conteneur de l'image
+                (imageContainer as HTMLElement).style.maxWidth = `${value}%`;
+                (imageContainer as HTMLElement).style.width = `${value}%`;
+                (imageContainer as HTMLElement).style.margin = '0 auto';
+
+                // S'assurer que l'image elle-même s'adapte
+                (currentImageElement as HTMLElement).style.width = '100%';
+                (currentImageElement as HTMLElement).style.height = 'auto';
+
+                console.log(`🎯 Applied width ${value}% to image container:`, imageContainer);
+            } else {
+                console.warn('❌ Could not find image or container for width adjustment');
             }
+        });
+
+        // Gestionnaire d'événement pour le champ alt
+        altInput.addEventListener('input', (e) => {
+            const altValue = (e.target as HTMLInputElement).value;
+            const img = wrapper.querySelector('img');
+            if (img) {
+                img.alt = altValue;
+            }
+        });
+
+        // Focus/blur styles pour le champ alt
+        altInput.addEventListener('focus', () => {
+            altInput.style.borderColor = '#3b82f6';
+            altInput.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+        });
+
+        altInput.addEventListener('blur', () => {
+            altInput.style.borderColor = '#d1d5db';
+            altInput.style.boxShadow = 'none';
         });
 
         // Assembler le contrôle
@@ -246,6 +308,8 @@ class CustomImageTool extends ImageTool {
 
         widthControl.appendChild(label);
         widthControl.appendChild(sliderContainer);
+        widthControl.appendChild(altLabel);
+        widthControl.appendChild(altInput);
 
         // Ajouter le contrôle au wrapper
         wrapper.appendChild(widthControl);
@@ -253,6 +317,8 @@ class CustomImageTool extends ImageTool {
         // Stocker la référence pour pouvoir l'afficher/masquer
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (this as any).widthControl = widthControl;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (this as any).altInput = altInput;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -597,6 +663,387 @@ class CustomColorTool {
     }
 }
 
+// Plugin de colonnes responsive avec support des blocks EditorJS
+class AdvancedColumnsTool extends CustomTool {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    api: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: any;
+    wrapper: HTMLElement | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    columnEditors: any[] = [];
+
+    static get toolbox() {
+        return {
+            title: 'Colonnes Avancées',
+            icon: '<svg width="17" height="15" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="3" width="8" height="18" rx="1" fill="currentColor"/><rect x="14" y="3" width="8" height="18" rx="1" fill="currentColor"/><circle cx="6" cy="12" r="2" fill="white"/><circle cx="18" cy="12" r="2" fill="white"/></svg>',
+        };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor({ data, api }: any) {
+        super();
+        this.api = api;
+        this.data = {
+            columns: data?.columns || [
+                {
+                    blocks: [
+                        {
+                            type: 'paragraph',
+                            data: { text: 'Colonne 1 - Ajoutez vos blocs ici...' },
+                        },
+                    ],
+                },
+                {
+                    blocks: [
+                        {
+                            type: 'paragraph',
+                            data: { text: 'Colonne 2 - Ajoutez vos blocs ici...' },
+                        },
+                    ],
+                },
+            ],
+            layout: data?.layout || '2-cols',
+        };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    override render() {
+        this.wrapper = document.createElement('div');
+        this.wrapper.classList.add('advanced-columns-tool');
+
+        // Créer le sélecteur de layout
+        const layoutSelector = document.createElement('div');
+        layoutSelector.classList.add('columns-layout-selector');
+        layoutSelector.innerHTML = `
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #374151;">Layout des colonnes:</label>
+            <select style="padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 12px;">
+                <option value="2-cols" ${this.data.layout === '2-cols' ? 'selected' : ''}>2 colonnes égales (50/50)</option>
+                <option value="3-cols" ${this.data.layout === '3-cols' ? 'selected' : ''}>3 colonnes égales (33/33/33)</option>
+                <option value="2-1" ${this.data.layout === '2-1' ? 'selected' : ''}>2 colonnes (66/33)</option>
+                <option value="1-2" ${this.data.layout === '1-2' ? 'selected' : ''}>2 colonnes (33/66)</option>
+            </select>
+        `;
+
+        // Créer le conteneur des colonnes
+        const columnsContainer = document.createElement('div');
+        columnsContainer.classList.add('advanced-columns-container');
+
+        this.updateLayout();
+        this.renderColumns(columnsContainer);
+
+        // Gestionnaire pour le changement de layout
+        const select = layoutSelector.querySelector('select');
+        select?.addEventListener('change', (e) => {
+            const target = e.target as HTMLSelectElement;
+            this.data.layout = target.value;
+            this.updateLayout();
+            this.renderColumns(columnsContainer);
+        });
+
+        this.wrapper.appendChild(layoutSelector);
+        this.wrapper.appendChild(columnsContainer);
+
+        return this.wrapper;
+    }
+
+    updateLayout() {
+        const layouts: Record<string, Array<{ width: number }>> = {
+            '2-cols': [{ width: 50 }, { width: 50 }],
+            '3-cols': [{ width: 33.33 }, { width: 33.33 }, { width: 33.33 }],
+            '2-1': [{ width: 66.66 }, { width: 33.33 }],
+            '1-2': [{ width: 33.33 }, { width: 66.66 }],
+        };
+
+        const newLayout = layouts[this.data.layout] || layouts['2-cols'];
+
+        // Ajuster le nombre de colonnes si nécessaire
+        while (this.data.columns.length < newLayout.length) {
+            this.data.columns.push({
+                blocks: [
+                    {
+                        type: 'paragraph',
+                        data: { text: `Colonne ${this.data.columns.length + 1} - Ajoutez vos blocs ici...` },
+                    },
+                ],
+            });
+        }
+
+        // Supprimer les colonnes en trop
+        if (this.data.columns.length > newLayout.length) {
+            this.data.columns = this.data.columns.slice(0, newLayout.length);
+        }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    renderColumns(container: any) {
+        container.innerHTML = '';
+
+        // Nettoyer les anciens éditeurs
+        this.columnEditors.forEach((editor) => {
+            if (editor && editor.destroy) {
+                editor.destroy();
+            }
+        });
+        this.columnEditors = [];
+
+        container.style.cssText = `
+            display: grid;
+            grid-template-columns: ${this.data.columns.map(() => '1fr').join(' ')};
+            gap: 16px;
+            min-height: 200px;
+            margin-top: 8px;
+        `;
+
+        this.data.columns.forEach((column: any, index: number) => {
+            const columnDiv = document.createElement('div');
+            columnDiv.classList.add('advanced-column');
+            columnDiv.style.cssText = `
+                border: 1px solid #e1e5e9;
+                border-radius: 8px;
+                padding: 8px;
+                background: #fafafa;
+                transition: all 0.2s ease;
+                min-height: 200px;
+            `;
+
+            // Créer un conteneur pour l'éditeur de cette colonne
+            const editorContainer = document.createElement('div');
+            editorContainer.id = `column-editor-${index}-${Date.now()}`;
+            editorContainer.style.cssText = `
+                min-height: 150px;
+                background: white;
+                border-radius: 4px;
+                padding: 8px;
+            `;
+
+            columnDiv.appendChild(editorContainer);
+            container.appendChild(columnDiv);
+
+            // Créer un mini-éditeur pour cette colonne
+            setTimeout(() => {
+                try {
+                    const columnEditor = new EditorJS({
+                        holder: editorContainer.id,
+                        tools: {
+                            paragraph: {
+                                // @ts-expect-error - EditorJS types compatibility
+                                class: Paragraph,
+                                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                                tunes: ['alignmentTune'],
+                            },
+                            Color: {
+                                class: CustomColorTool,
+                                config: {
+                                    colors: [
+                                        ...(props.siteColors
+                                            ? [
+                                                  props.siteColors.primary_color,
+                                                  props.siteColors.secondary_color,
+                                                  props.siteColors.accent_color,
+                                              ].filter(Boolean)
+                                            : []),
+                                        '#000000',
+                                        '#FFFFFF',
+                                        '#6b7280',
+                                        '#ef4444',
+                                        '#f97316',
+                                        '#eab308',
+                                        '#22c55e',
+                                        '#3b82f6',
+                                        '#8b5cf6',
+                                        '#ec4899',
+                                    ],
+                                    defaultColor: props.siteColors?.primary_color || '#4E8D44',
+                                },
+                            },
+                            header: {
+                                // @ts-expect-error - EditorJS types compatibility
+                                class: Header,
+                                config: {
+                                    levels: [2, 3, 4],
+                                    defaultLevel: 3,
+                                },
+                                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                                tunes: ['alignmentTune'],
+                            },
+                            list: {
+                                // @ts-expect-error - EditorJS types compatibility
+                                class: List,
+                                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                                tunes: ['alignmentTune'],
+                            },
+                            code: Code,
+                            image: {
+                                class: CustomImageTool,
+                                config: {
+                                    endpoints: {
+                                        byFile: '/articles/upload-image',
+                                    },
+                                    field: 'image',
+                                    types: 'image/*',
+                                    additionalRequestHeaders: {
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                                    },
+                                    captionPlaceholder: 'Entrez une légende...',
+                                    buttonContent: 'Sélectionner une image',
+                                    actions: [
+                                        {
+                                            name: 'stretch',
+                                            icon: '<svg width="17" height="10" viewBox="0 0 17 10" xmlns="http://www.w3.org/2000/svg"><path d="M13.568 5.925H4.056l1.703 1.703a1.125 1.125 0 0 1-1.59 1.591L.962 6.014A1.069 1.069 0 0 1 .588 4.26L4.38.469a1.069 1.069 0 0 1 1.512 1.511L4.084 3.787h9.606l-1.85-1.85a1.069 1.069 0 1 1 1.512-1.51l3.792 3.791a1.069 1.069 0 0 1-.475 1.788L13.514 9.16a1.125 1.125 0 0 1-1.59-1.591l1.644-1.644z"/></svg>',
+                                            title: "Étirer l'image",
+                                            toggle: true,
+                                        },
+                                        {
+                                            name: 'withBorder',
+                                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M15.8 10.592v2.043h2.35v2.138H15.8v2.232h-2.25v-2.232h-2.4v-2.138h2.4v-2.043h2.25zm1.9-8.025v2.138h-2.35v2.232h-2.25v-2.232h-2.4V2.567h2.4V.429h2.25v2.138h2.35z"/><path d="M4.05 8.967h2.35v2.043h2.25v2.138H6.4v2.232H4.05v-2.232H1.65v-2.138h2.4V8.967z"/></svg>',
+                                            title: 'Ajouter une bordure',
+                                            toggle: true,
+                                        },
+                                        {
+                                            name: 'withBackground',
+                                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10.043 8.265l3.183-3.183h-2.924L4.75 10.636v2.923l4.15-4.15v2.351l-2.158 2.159H8.9v2.137H4.7c-1.215 0-2.2-.936-2.2-2.09v-8.93c0-1.154.985-2.09 2.2-2.09h10.663c1.215 0 2.2.936 2.2 2.09v3.183L15.4 9.26V6.334c0-.607-.49-1.098-1.097-1.098H5.802c-.608 0-1.098.49-1.098 1.098v7.132c0 .608.49 1.098 1.098 1.098H10.043V8.265z"/></svg>',
+                                            title: 'Ajouter un arrière-plan',
+                                            toggle: true,
+                                        },
+                                        {
+                                            name: 'small',
+                                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor"/><rect x="2" y="10" width="16" height="2" rx="1" fill="currentColor"/><rect x="2" y="14" width="16" height="2" rx="1" fill="currentColor"/></svg>',
+                                            title: 'Petite taille (25%)',
+                                            toggle: true,
+                                        },
+                                        {
+                                            name: 'medium',
+                                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="10" height="8" rx="1" fill="currentColor"/><rect x="2" y="12" width="16" height="2" rx="1" fill="currentColor"/><rect x="2" y="16" width="16" height="2" rx="1" fill="currentColor"/></svg>',
+                                            title: 'Taille moyenne (50%)',
+                                            toggle: true,
+                                        },
+                                        {
+                                            name: 'large',
+                                            icon: '<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="16" height="10" rx="1" fill="currentColor"/><rect x="2" y="14" width="16" height="2" rx="1" fill="currentColor"/><rect x="2" y="17" width="16" height="1" rx="0.5" fill="currentColor"/></svg>',
+                                            title: 'Grande taille (75%)',
+                                            toggle: true,
+                                        },
+                                    ],
+                                },
+                            },
+                            embed: {
+                                class: Embed,
+                                inlineToolbar: true,
+                                config: {
+                                    services: {
+                                        youtube: true,
+                                        vimeo: true,
+                                    },
+                                },
+                            },
+                            linkTool: {
+                                class: LinkTool,
+                                config: {
+                                    endpoint: '/articles/fetch-url-metadata',
+                                },
+                            },
+                            button: {
+                                class: ButtonTool,
+                                tunes: ['alignmentTune'],
+                            },
+                            Marker: {
+                                class: CustomColorTool,
+                                config: {
+                                    colors: ['#FFBF00', '#FFD700', '#FFFF00'],
+                                    defaultColor: '#FFBF00',
+                                    icon: `<svg fill="#000000" height="20" width="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g><path d="M17.6,6L6.9,16.7c-0.2,0.2-0.3,0.4-0.3,0.6L6,23.9c0,0.3,0.1,0.6,0.3,0.8C6.5,24.9,6.7,25,7,25c0,0,0.1,0,0.1,0l6.6-0.6 c0.2,0,0.5-0.1,0.6-0.3L25,13.4L17.6,6z"></path><path d="M26.4,12l1.4-1.4c1.2-1.2,1.1-3.1-0.1-4.3l-3-3c-0.6-0.6-1.3-0.9-2.2-0.9c-0.8,0-1.6,0.3-2.2,0.9L19,4.6L26.4,12z"></path></g><g><path d="M28,29H4c-0.6,0-1-0.4-1-1s0.4-1,1-1h24c0.6,0,1,0.4,1,1S28.6,29,28,29z"></path></g></svg>`,
+                                },
+                            },
+                            alignmentTune: {
+                                class: AlignmentTuneTool,
+                                config: {
+                                    default: 'left',
+                                    blocks: {
+                                        header: 'left',
+                                        list: 'left',
+                                        paragraph: 'left',
+                                        button: 'left',
+                                    },
+                                },
+                            },
+                            attaches: {
+                                class: AttachesTool,
+                                config: {
+                                    endpoint: '/articles/upload-file',
+                                    field: 'file',
+                                    types: '*',
+                                    buttonText: 'Sélectionner un fichier',
+                                    errorMessage: "Erreur lors de l'upload du fichier",
+                                    additionalRequestHeaders: {
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                                    },
+                                },
+                            },
+                        },
+                        data: {
+                            blocks: column.blocks || [],
+                        },
+                        placeholder: `Contenu de la colonne ${index + 1}...`,
+                        onChange: async () => {
+                            try {
+                                const outputData = await columnEditor.save();
+                                this.data.columns[index].blocks = outputData.blocks;
+                            } catch (error) {
+                                console.error('Erreur lors de la sauvegarde de la colonne:', error);
+                            }
+                        },
+                    });
+
+                    this.columnEditors.push(columnEditor);
+                } catch (error) {
+                    console.error("Erreur lors de la création de l'éditeur de colonne:", error);
+                    // Fallback vers un textarea simple
+                    editorContainer.innerHTML = `
+                        <textarea 
+                            placeholder="Contenu de la colonne ${index + 1}..."
+                            style="width: 100%; min-height: 150px; border: none; resize: vertical; outline: none;"
+                        ></textarea>
+                    `;
+                }
+            }, 100);
+        });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    override save() {
+        return {
+            columns: this.data.columns,
+            layout: this.data.layout,
+        };
+    }
+
+    static override get sanitize() {
+        return {
+            columns: {
+                blocks: {},
+            },
+            layout: {},
+        };
+    }
+
+    // Nettoyer les éditeurs quand le bloc est supprimé
+    destroy() {
+        this.columnEditors.forEach((editor) => {
+            if (editor && editor.destroy) {
+                try {
+                    editor.destroy();
+                } catch (error) {
+                    console.error("Erreur lors de la destruction de l'éditeur:", error);
+                }
+            }
+        });
+        this.columnEditors = [];
+    }
+}
+
 const props = defineProps({
     initialContent: {
         type: String,
@@ -678,7 +1125,7 @@ const initializeEditor = () => {
         holder: editorContainer.value,
         tools: {
             paragraph: {
-                // @ts-expect-error - EditorJS types are not fully compatible with our implementation
+                // @ts-expect-error - EditorJS types compatibility
                 class: Paragraph,
                 inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
                 tunes: ['alignmentTune'],
@@ -688,7 +1135,7 @@ const initializeEditor = () => {
                 config: colorConfig,
             },
             header: {
-                // @ts-expect-error - EditorJS types are not fully compatible with our implementation
+                // @ts-expect-error - EditorJS types compatibility
                 class: Header,
                 config: {
                     levels: [2, 3, 4, 5, 6],
@@ -698,7 +1145,7 @@ const initializeEditor = () => {
                 tunes: ['alignmentTune'],
             },
             list: {
-                // @ts-expect-error - EditorJS types are not fully compatible with our implementation
+                // @ts-expect-error - EditorJS types compatibility
                 class: List,
                 inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
                 tunes: ['alignmentTune'],
@@ -829,6 +1276,11 @@ const initializeEditor = () => {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                     },
                 },
+            },
+            columns: {
+                // @ts-expect-error - EditorJS types are not fully compatible with our implementation
+                class: AdvancedColumnsTool,
+                tunes: ['alignmentTune'],
             },
         },
         data: initialData,
@@ -1190,5 +1642,191 @@ onBeforeUnmount(() => {
     font-weight: 500;
     min-width: 40px;
     text-align: right;
+}
+
+.image-width-control input[type='text'] {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+.image-width-control input[type='text']:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+/* Styles pour le block de colonnes */
+.advanced-columns-tool {
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 16px;
+    background: #ffffff;
+    margin: 8px 0;
+}
+
+.columns-layout-selector {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.columns-layout-selector label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.columns-layout-selector select {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.columns-layout-selector select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.advanced-columns-container {
+    display: grid;
+    gap: 16px;
+    min-height: 120px;
+}
+
+.advanced-columns-container .advanced-column {
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 12px;
+    background: #fafafa;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.advanced-columns-container .advanced-column:hover {
+    border-color: #cbd5e1;
+}
+
+.advanced-columns-container .advanced-column textarea {
+    width: 100%;
+    min-height: 100px;
+    border: none;
+    background: transparent;
+    resize: vertical;
+    outline: none;
+    font-size: 14px;
+    line-height: 1.5;
+    font-family: inherit;
+    color: #374151;
+}
+
+.advanced-columns-container .advanced-column textarea::placeholder {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* Responsive pour les colonnes */
+@media (max-width: 768px) {
+    .advanced-columns-container {
+        grid-template-columns: 1fr !important;
+        gap: 12px;
+    }
+
+    .advanced-columns-container .advanced-column {
+        padding: 16px;
+    }
+
+    .advanced-columns-container .advanced-column textarea {
+        min-height: 80px;
+    }
+}
+
+/* Animation pour les colonnes */
+@keyframes columnAppear {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.advanced-columns-container .advanced-column {
+    animation: columnAppear 0.3s ease-out;
+}
+
+/* Styles pour le bouton de contrôle d'image */
+.custom-image-control-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    padding: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+}
+
+.custom-image-control-button:hover {
+    background: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+/* Styles pour le block de colonnes avancées */
+.advanced-columns-tool .codex-editor {
+    padding: 0 !important;
+}
+
+.advanced-columns-tool .ce-toolbar__content,
+.advanced-columns-tool .ce-block__content {
+    max-width: 100% !important;
+}
+
+.advanced-columns-tool .ce-block {
+    margin: 8px 0 !important;
+}
+
+.advanced-columns-tool .ce-toolbar {
+    margin-left: 0 !important;
+}
+
+.advanced-column .codex-editor {
+    border: none !important;
+    background: transparent !important;
+}
+
+.advanced-column .ce-toolbar__plus {
+    color: #3b82f6 !important;
+}
+
+.advanced-column .ce-toolbar__plus:hover {
+    background: #f3f4f6 !important;
+}
+
+/* Styles responsive pour les éditeurs dans les colonnes */
+@media (max-width: 768px) {
+    .advanced-columns-container .advanced-column {
+        margin-bottom: 16px;
+    }
+
+    .advanced-column .codex-editor {
+        min-height: 120px !important;
+    }
 }
 </style>

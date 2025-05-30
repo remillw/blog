@@ -221,7 +221,7 @@ interface Article {
     excerpt: string;
     content: string;
     content_html: string;
-    cover_image_path?: string;
+    cover_image?: string;
     status: string;
     scheduled_at?: string;
     meta_title: string;
@@ -264,7 +264,6 @@ const form = useForm({
     excerpt: '',
     content: '',
     content_html: '',
-    cover_image_path: '',
     cover_image: null as File | null,
     status: 'draft',
     scheduled_at: undefined as string | undefined,
@@ -414,7 +413,6 @@ const handleCoverImageUpload = async (event: Event) => {
 const removeCoverImage = () => {
     currentCoverImageUrl.value = '';
     form.cover_image = null;
-    form.cover_image_path = '';
     if (coverImageInput.value) {
         coverImageInput.value.value = '';
     }
@@ -451,11 +449,10 @@ watch(
             }
 
             form.content_html = newArticle.content_html || '';
-            form.cover_image_path = newArticle.cover_image_path || '';
 
             // Afficher l'image de couverture existante
-            if (newArticle.cover_image_path) {
-                currentCoverImageUrl.value = `/storage/${newArticle.cover_image_path}`;
+            if (newArticle.cover_image) {
+                currentCoverImageUrl.value = newArticle.cover_image;
             }
             form.meta_title = newArticle.meta_title;
             form.meta_description = newArticle.meta_description;

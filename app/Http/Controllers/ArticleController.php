@@ -25,7 +25,8 @@ class ArticleController extends Controller
 
     public function index()
     {
-        
+        // Pour l'instant, récupérer tous les articles de l'utilisateur
+        // TODO: Implémenter la logique de site actuel plus tard
         $userSiteIds = Site::where('user_id', Auth::id())->pluck('id');
         
         $articles = Article::with(['author', 'categories', 'tags'])
@@ -113,16 +114,17 @@ class ArticleController extends Controller
         }
 
         // Gérer l'upload de l'image de couverture avec un nom personnalisé
-        $coverImagePath = null;
+        $coverImageUrl = null;
         if ($request->hasFile('cover_image')) {
             $coverImagePath = $this->storeCoverImage($request->file('cover_image'), $slug);
+            $coverImageUrl = asset('storage/' . $coverImagePath);
         }
 
         $article = Article::create([
             ...$validated,
             'user_id' => Auth::id(),
             'slug' => $slug,
-            'cover_image_path' => $coverImagePath,
+            'cover_image' => $coverImageUrl,
             'source' => 'created',
             'external_id' => Str::uuid(),
             'is_synced' => false, 
@@ -222,14 +224,15 @@ class ArticleController extends Controller
         // Gérer l'upload de l'image de couverture
         $updateData = $validated;
         if ($request->hasFile('cover_image')) {
-            // Supprimer l'ancienne image si elle existe
-            if ($article->cover_image_path) {
-                $this->deleteCoverImage($article->cover_image_path);
+            // Supprimer l'ancienne image si elle existe (extraire le chemin de l'URL)
+            if ($article->cover_image) {
+                $oldPath = str_replace(asset('storage/'), '', $article->cover_image);
+                $this->deleteCoverImage($oldPath);
             }
             
             // Stocker la nouvelle image avec le slug (potentiellement mis à jour)
             $coverImagePath = $this->storeCoverImage($request->file('cover_image'), $newSlug);
-            $updateData['cover_image_path'] = $coverImagePath;
+            $updateData['cover_image'] = asset('storage/' . $coverImagePath);
         }
 
         $article->update($updateData);
@@ -253,9 +256,10 @@ class ArticleController extends Controller
 
     public function destroy(Article $article)
     {
-        // Supprimer l'image de couverture si elle existe
-        if ($article->cover_image_path) {
-            $this->deleteCoverImage($article->cover_image_path);
+        // Supprimer l'image de couverture si elle existe (extraire le chemin de l'URL)
+        if ($article->cover_image) {
+            $imagePath = str_replace(asset('storage/'), '', $article->cover_image);
+            $this->deleteCoverImage($imagePath);
         }
 
         // Envoyer un webhook de suppression si l'article était synchronisé

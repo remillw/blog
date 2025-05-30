@@ -88,7 +88,7 @@ class ArticleApiController extends Controller
                     'content' => $article->content_html, // HTML pour webhook
                     'excerpt' => $article->excerpt,
                     'status' => $article->status,
-                    'featured_image_url' => $article->featured_image_url,
+                    'cover_image' => $article->cover_image,
                     'meta_title' => $article->meta_title,
                     'meta_description' => $article->meta_description,
                     'author_name' => $article->author_name,
