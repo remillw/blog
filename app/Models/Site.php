@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Collection;
 
 class Site extends Model
 {
@@ -42,6 +43,11 @@ class Site extends Model
             ->withTimestamps();
     }
 
+    public function articles(): HasMany
+    {
+        return $this->hasMany(Article::class);
+    }
+
     public function webhookEndpoints(): HasMany
     {
         return $this->hasMany(WebhookEndpoint::class);
@@ -63,6 +69,29 @@ class Site extends Model
 
     public function categories(): BelongsToMany
     {
-        return $this->belongsToMany(Category::class)->withTimestamps();
+        return $this->belongsToMany(Category::class, 'category_site')
+            ->withTimestamps();
+    }
+
+    /**
+     * **NOUVEAU: Relation vers les catégories globales**
+     */
+    public function globalCategories(): BelongsToMany
+    {
+        return $this->belongsToMany(GlobalCategory::class, 'site_global_categories')
+            ->withPivot(['language_code', 'custom_name', 'is_active', 'sort_order'])
+            ->withTimestamps();
+    }
+
+    /**
+     * **NOUVEAU: Obtenir les catégories globales pour une langue spécifique**
+     */
+    public function getCategoriesForLanguage(string $languageCode): Collection
+    {
+        return $this->globalCategories()
+            ->wherePivot('language_code', $languageCode)
+            ->wherePivot('is_active', true)
+            ->orderByPivot('sort_order')
+            ->get();
     }
 }

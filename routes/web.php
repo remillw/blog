@@ -46,6 +46,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('articles.generate-ai');
     Route::post('/articles/translate', [App\Http\Controllers\Api\AIController::class, 'translateArticle'])
         ->name('articles.translate');
+    
+    // Routes pour les batches IA (50% moins cher!)
+    Route::post('/ai/batch', [App\Http\Controllers\Api\AIController::class, 'createBatch'])
+        ->name('ai.batch.create');
+    Route::get('/ai/batch/{batchId}/status', [App\Http\Controllers\Api\AIController::class, 'getBatchStatus'])
+        ->name('ai.batch.status');
+    Route::get('/ai/batch/{batchId}/results', [App\Http\Controllers\Api\AIController::class, 'getBatchResults'])
+        ->name('ai.batch.results');
+    Route::get('/ai/batches', [App\Http\Controllers\Api\AIController::class, 'getUserBatches'])
+        ->name('ai.batches');
 });
 
 require __DIR__.'/settings.php';

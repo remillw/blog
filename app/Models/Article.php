@@ -16,6 +16,7 @@ class Article extends Model
 
     protected $fillable = [
         'site_id',
+        'language_code',
         'user_id',
         'title',
         'slug',

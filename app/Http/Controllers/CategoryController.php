@@ -47,6 +47,7 @@ class CategoryController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'language_code' => 'nullable|string|max:5',
             'sites' => 'required|array|min:1',
             'sites.*' => 'exists:sites,id',
         ]);
@@ -62,6 +63,7 @@ class CategoryController extends Controller
         $category = Category::create([
             'name' => $request->name,
             'description' => $request->description,
+            'language_code' => $request->language_code ?? 'fr',
         ]);
 
         $category->sites()->sync($request->sites);
@@ -101,6 +103,7 @@ class CategoryController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'language_code' => 'nullable|string|max:5',
             'sites' => 'required|array|min:1',
             'sites.*' => 'exists:sites,id',
         ]);
@@ -115,6 +118,7 @@ class CategoryController extends Controller
         $category->update([
             'name' => $request->name,
             'description' => $request->description,
+            'language_code' => $request->language_code ?? 'fr',
         ]);
 
         $category->sites()->sync($request->sites);
@@ -125,7 +129,7 @@ class CategoryController extends Controller
     /**
      * Get categories for a specific site.
      */
-    public function getBySite($siteId)
+    public function getBySite($siteId, Request $request)
     {
         // Vérifier que le site appartient à l'utilisateur
         $site = Site::where('id', $siteId)
@@ -136,7 +140,18 @@ class CategoryController extends Controller
             return response()->json(['error' => 'Site not found or unauthorized'], 404);
         }
 
-        $categories = $site->categories()->get(['categories.id', 'categories.name']);
+        // Récupérer le paramètre de langue depuis la requête
+        $languageCode = $request->get('language');
+
+        // Utiliser la relation many-to-many via la table pivot category_site
+        $query = $site->categories();
+
+        // Si un code de langue est fourni, filtrer les catégories par langue
+        if ($languageCode) {
+            $query->where('categories.language_code', $languageCode);
+        }
+
+        $categories = $query->get(['categories.id', 'categories.name', 'categories.language_code']);
 
         return response()->json($categories);
     }

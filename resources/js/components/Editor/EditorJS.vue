@@ -40,17 +40,19 @@ class CustomTool {
     }
 }
 
-// Classe pour le bouton personnalisé
+// Classe pour le bouton personnalisé avec call-to-actions ChatGPT
 class ButtonTool extends CustomTool {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     api: any;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: any;
+    wrapper: HTMLElement | null = null;
+    isEditing: boolean = false;
 
     static get toolbox() {
         return {
-            title: 'Bouton',
-            icon: '<svg width="17" height="15" viewBox="0 0 17 15" xmlns="http://www.w3.org/2000/svg"><path d="M1 7.5C1 3.91015 3.91015 1 7.5 1H15.5C16.0523 1 16.5 1.44772 16.5 2V13C16.5 13.5523 16.0523 14 15.5 14H7.5C3.91015 14 1 11.0899 1 7.5Z" stroke="currentColor" fill="none"/><path d="M5.5 7.5H11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+            title: 'Call-to-Action',
+            icon: '<svg width="17" height="15" viewBox="0 0 17 15" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="4" width="15" height="7" rx="3" stroke="currentColor" fill="none" stroke-width="1.5"/><path d="M6 7.5h5M8.5 6v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
         };
     }
 
@@ -59,59 +61,173 @@ class ButtonTool extends CustomTool {
         super();
         this.api = api;
         this.data = {
-            text: data?.text || 'Cliquez ici',
+            text: data?.text || '👆 Cliquez ici',
             link: data?.link || '',
             style: data?.style || 'primary',
+            target: data?.target || '_self',
+            rel: data?.rel || '',
         };
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     override render() {
-        const container = document.createElement('div');
-        container.classList.add('button-tool');
+        this.wrapper = document.createElement('div');
+        this.wrapper.classList.add('button-tool');
 
-        const button = document.createElement('button');
+        this.renderViewMode();
+        this.setupHoverSystem();
+
+        return this.wrapper;
+    }
+
+    renderViewMode() {
+        if (!this.wrapper) return;
+
+        this.wrapper.innerHTML = '';
+        this.isEditing = false;
+
+        const buttonPreview = document.createElement('div');
+        buttonPreview.classList.add('button-tool__preview');
+
+        const button = document.createElement('a');
         button.classList.add('button-tool__btn');
         button.classList.add(`button-tool__btn--${this.data.style}`);
         button.textContent = this.data.text;
-        button.contentEditable = 'false';
-
-        if (this.data.link) {
-            button.dataset.href = this.data.link;
+        button.href = this.data.link || '#';
+        button.target = this.data.target;
+        if (this.data.rel) {
+            button.rel = this.data.rel;
         }
+        button.onclick = (e) => e.preventDefault(); // Empêcher la navigation en mode édition
+
+        buttonPreview.appendChild(button);
+        this.wrapper.appendChild(buttonPreview);
+
+        // Ajouter le badge "CTA" pour différencier des liens
+        const ctaBadge = document.createElement('div');
+        ctaBadge.className = 'cta-badge';
+        ctaBadge.textContent = 'CTA';
+        ctaBadge.style.cssText = `
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #f59e0b;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-family: monospace;
+        `;
+        buttonPreview.style.position = 'relative';
+        buttonPreview.appendChild(ctaBadge);
+    }
+
+    renderEditMode() {
+        if (!this.wrapper) return;
+
+        this.wrapper.innerHTML = '';
+        this.isEditing = true;
+
+        // Mode édition avec formulaire complet
+        const editContainer = document.createElement('div');
+        editContainer.classList.add('button-tool__edit');
+
+        const buttonPreview = document.createElement('div');
+        buttonPreview.classList.add('button-tool__preview');
+        
+        const button = document.createElement('a');
+        button.classList.add('button-tool__btn');
+        button.classList.add(`button-tool__btn--${this.data.style}`);
+        button.textContent = this.data.text;
+        button.href = this.data.link || '#';
+        button.target = this.data.target;
+        if (this.data.rel) {
+            button.rel = this.data.rel;
+        }
+        button.onclick = (e) => e.preventDefault();
+
+        buttonPreview.appendChild(button);
+
+        // Formulaire de configuration
+        const form = document.createElement('div');
+        form.classList.add('button-tool__form');
+
+        // Champ texte
+        const textGroup = document.createElement('div');
+        textGroup.classList.add('button-tool__group');
+        const textLabel = document.createElement('label');
+        textLabel.textContent = '📝 Texte du bouton:';
+        textLabel.className = 'button-tool__label';
 
         const textInput = document.createElement('input');
         textInput.classList.add('button-tool__input');
-        textInput.placeholder = 'Texte du bouton';
+        textInput.placeholder = 'Ex: Découvrez maintenant, En savoir plus...';
         textInput.value = this.data.text;
         textInput.addEventListener('input', () => {
             this.data.text = textInput.value;
             button.textContent = textInput.value;
         });
 
+        textGroup.appendChild(textLabel);
+        textGroup.appendChild(textInput);
+
+        // Champ lien
+        const linkGroup = document.createElement('div');
+        linkGroup.classList.add('button-tool__group');
+        const linkLabel = document.createElement('label');
+        linkLabel.textContent = '🔗 Lien (URL):';
+        linkLabel.className = 'button-tool__label';
+
         const linkInput = document.createElement('input');
         linkInput.classList.add('button-tool__input');
-        linkInput.placeholder = 'Lien (https://...)';
+        linkInput.placeholder = 'https://exemple.com ou /page-interne';
         linkInput.value = this.data.link;
         linkInput.addEventListener('input', () => {
             this.data.link = linkInput.value;
-            button.dataset.href = linkInput.value;
+            button.href = linkInput.value || '#';
+            
+            // Détecter automatiquement les liens externes
+            if (linkInput.value && (linkInput.value.startsWith('http') || linkInput.value.startsWith('https'))) {
+                this.data.target = '_blank';
+                this.data.rel = 'noopener noreferrer';
+                targetSelect.value = '_blank';
+            } else {
+                this.data.target = '_self';
+                this.data.rel = '';
+                targetSelect.value = '_self';
+            }
+            button.target = this.data.target;
+            button.rel = this.data.rel;
         });
+
+        linkGroup.appendChild(linkLabel);
+        linkGroup.appendChild(linkInput);
+
+        // Style du bouton
+        const styleGroup = document.createElement('div');
+        styleGroup.classList.add('button-tool__group');
+        const styleLabel = document.createElement('label');
+        styleLabel.textContent = '🎨 Style:';
+        styleLabel.className = 'button-tool__label';
 
         const styleSelect = document.createElement('select');
         styleSelect.classList.add('button-tool__select');
 
         const options = [
-            { value: 'primary', text: 'Principal' },
-            { value: 'secondary', text: 'Secondaire' },
-            { value: 'danger', text: 'Danger' },
-            { value: 'success', text: 'Succès' },
+            { value: 'primary', text: '🔥 Principal (Attention)', description: 'Bouton principal avec couleur site' },
+            { value: 'secondary', text: '📋 Secondaire (Info)', description: 'Bouton neutre pour infos' },
+            { value: 'success', text: '✅ Succès (Action)', description: 'Vert pour actions positives' },
+            { value: 'warning', text: '⚠️ Attention (Promo)', description: 'Orange pour promotions' },
+            { value: 'danger', text: '🚨 Urgent (Dernière chance)', description: 'Rouge pour urgence' },
+            { value: 'outline', text: '⭕ Contour (Discret)', description: 'Bordure seule, plus discret' },
         ];
 
         options.forEach((opt) => {
             const option = document.createElement('option');
             option.value = opt.value;
             option.textContent = opt.text;
+            option.title = opt.description;
             if (opt.value === this.data.style) {
                 option.selected = true;
             }
@@ -124,16 +240,235 @@ class ButtonTool extends CustomTool {
             button.classList.add(`button-tool__btn--${this.data.style}`);
         });
 
-        const inputWrapper = document.createElement('div');
-        inputWrapper.classList.add('button-tool__inputs');
-        inputWrapper.appendChild(textInput);
-        inputWrapper.appendChild(linkInput);
-        inputWrapper.appendChild(styleSelect);
+        styleGroup.appendChild(styleLabel);
+        styleGroup.appendChild(styleSelect);
 
-        container.appendChild(button);
-        container.appendChild(inputWrapper);
+        // Target du lien
+        const targetGroup = document.createElement('div');
+        targetGroup.classList.add('button-tool__group');
+        const targetLabel = document.createElement('label');
+        targetLabel.textContent = '🎯 Ouverture:';
+        targetLabel.className = 'button-tool__label';
+        
+        const targetSelect = document.createElement('select');
+        targetSelect.classList.add('button-tool__select');
 
-        return container;
+        const targetOptions = [
+            { value: '_self', text: '📄 Même page' },
+            { value: '_blank', text: '🆕 Nouvel onglet' },
+        ];
+
+        targetOptions.forEach((opt) => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.text;
+            if (opt.value === this.data.target) {
+                option.selected = true;
+            }
+            targetSelect.appendChild(option);
+        });
+
+        targetSelect.addEventListener('change', () => {
+            this.data.target = targetSelect.value;
+            button.target = this.data.target;
+            
+            // Ajouter rel="noopener noreferrer" pour les liens externes
+            if (this.data.target === '_blank') {
+                this.data.rel = 'noopener noreferrer';
+                button.rel = this.data.rel;
+            } else {
+                this.data.rel = '';
+                button.rel = '';
+            }
+        });
+
+        targetGroup.appendChild(targetLabel);
+        targetGroup.appendChild(targetSelect);
+
+        // Suggestions de CTAs
+        const suggestionsGroup = document.createElement('div');
+        suggestionsGroup.classList.add('button-tool__group');
+        const suggestionsLabel = document.createElement('label');
+        suggestionsLabel.textContent = '💡 Suggestions de CTA:';
+        suggestionsLabel.className = 'button-tool__label';
+        
+        const suggestionsContainer = document.createElement('div');
+        suggestionsContainer.classList.add('button-tool__suggestions');
+
+        const suggestions = [
+            '🔍 Découvrir maintenant',
+            '📖 En savoir plus',
+            '🎯 Commencer gratuitement',
+            '💎 Voir l\'offre spéciale',
+            '📧 Me tenir informé(e)',
+            '🔥 Profiter de -50%',
+            '⚡ Accès immédiat',
+            '🎁 Récupérer mon bonus',
+            '📞 Contactez-nous',
+            '📋 Télécharger le guide',
+        ];
+
+        suggestions.forEach((suggestion) => {
+            const suggestionBtn = document.createElement('button');
+            suggestionBtn.type = 'button';
+            suggestionBtn.textContent = suggestion;
+            suggestionBtn.className = 'button-tool__suggestion';
+            suggestionBtn.addEventListener('click', () => {
+                textInput.value = suggestion;
+                this.data.text = suggestion;
+                button.textContent = suggestion;
+            });
+            suggestionsContainer.appendChild(suggestionBtn);
+        });
+
+        suggestionsGroup.appendChild(suggestionsLabel);
+        suggestionsGroup.appendChild(suggestionsContainer);
+
+        // Bouton de sauvegarde
+        const saveGroup = document.createElement('div');
+        saveGroup.classList.add('button-tool__group');
+        saveGroup.style.cssText = `
+            border-top: 1px solid #e1e5e9;
+            padding-top: 16px;
+            margin-top: 16px;
+            display: flex;
+            justify-content: flex-end;
+        `;
+
+        const saveButton = document.createElement('button');
+        saveButton.type = 'button';
+        saveButton.textContent = '💾 Sauvegarder';
+        saveButton.className = 'button-tool__save';
+        saveButton.style.cssText = `
+            background: #22c55e;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        `;
+
+        saveButton.addEventListener('click', () => {
+            this.renderViewMode();
+        });
+
+        saveButton.addEventListener('mouseenter', () => {
+            saveButton.style.backgroundColor = '#16a34a';
+        });
+
+        saveButton.addEventListener('mouseleave', () => {
+            saveButton.style.backgroundColor = '#22c55e';
+        });
+
+        saveGroup.appendChild(saveButton);
+
+        // Assembler le formulaire
+        form.appendChild(textGroup);
+        form.appendChild(linkGroup);
+        form.appendChild(styleGroup);
+        form.appendChild(targetGroup);
+        form.appendChild(suggestionsGroup);
+        form.appendChild(saveGroup);
+
+        editContainer.appendChild(buttonPreview);
+        editContainer.appendChild(form);
+        this.wrapper.appendChild(editContainer);
+    }
+
+    setupHoverSystem() {
+        if (!this.wrapper) return;
+
+        let hoverTimeout: number;
+        let tooltip: HTMLElement | null = null;
+
+        this.wrapper.addEventListener('mouseenter', () => {
+            if (this.isEditing) return;
+
+            hoverTimeout = setTimeout(() => {
+                tooltip = this.createCtaTooltip();
+                document.body.appendChild(tooltip);
+                this.positionCtaTooltip(tooltip);
+            }, 300) as unknown as number; // Plus rapide que les liens
+        });
+
+        this.wrapper.addEventListener('mouseleave', () => {
+            clearTimeout(hoverTimeout);
+            if (tooltip) {
+                tooltip.remove();
+                tooltip = null;
+            }
+        });
+    }
+
+    createCtaTooltip(): HTMLElement {
+        const tooltip = document.createElement('div');
+        tooltip.className = 'cta-hover-tooltip';
+        tooltip.style.cssText = `
+            position: fixed;
+            background: #f59e0b;
+            color: white;
+            border-radius: 8px;
+            padding: 8px 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: tooltipAppear 0.2s ease-out;
+        `;
+
+        tooltip.innerHTML = `
+            <span>CTA: ${this.data.text} → ${this.data.link || 'Aucun lien'}</span>
+            <button type="button" class="edit-cta-btn" style="
+                background: white;
+                color: #f59e0b;
+                border: none;
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-size: 10px;
+                cursor: pointer;
+                flex-shrink: 0;
+                font-weight: bold;
+            ">
+                ✏️ Edit
+            </button>
+        `;
+
+        const editBtn = tooltip.querySelector('.edit-cta-btn');
+        editBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            tooltip.remove();
+            this.renderEditMode();
+        });
+
+        return tooltip;
+    }
+
+    positionCtaTooltip(tooltip: HTMLElement) {
+        if (!this.wrapper) return;
+
+        const wrapperRect = this.wrapper.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+
+        let left = wrapperRect.left + (wrapperRect.width / 2) - (tooltipRect.width / 2);
+        let top = wrapperRect.top - tooltipRect.height - 8;
+
+        // Ajuster si le tooltip sort de l'écran
+        if (left < 10) left = 10;
+        if (left + tooltipRect.width > window.innerWidth - 10) {
+            left = window.innerWidth - tooltipRect.width - 10;
+        }
+        if (top < 10) {
+            top = wrapperRect.bottom + 8;
+        }
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,6 +477,8 @@ class ButtonTool extends CustomTool {
             text: this.data.text,
             link: this.data.link,
             style: this.data.style,
+            target: this.data.target,
+            rel: this.data.rel,
         };
     }
 
@@ -150,6 +487,8 @@ class ButtonTool extends CustomTool {
             text: {},
             link: {},
             style: {},
+            target: {},
+            rel: {},
         };
     }
 }
@@ -829,7 +1168,7 @@ class AdvancedColumnsTool extends CustomTool {
                             paragraph: {
                                 // @ts-expect-error - EditorJS types compatibility
                                 class: Paragraph,
-                                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                                inlineToolbar: ['bold', 'italic', 'Color', 'Marker', 'InlineLink'],
                                 tunes: ['alignmentTune'],
                             },
                             Color: {
@@ -857,20 +1196,23 @@ class AdvancedColumnsTool extends CustomTool {
                                     defaultColor: props.siteColors?.primary_color || '#4E8D44',
                                 },
                             },
+                            InlineLink: {
+                                class: InlineLinkTool,
+                            },
                             header: {
                                 // @ts-expect-error - EditorJS types compatibility
                                 class: Header,
                                 config: {
-                                    levels: [2, 3, 4],
-                                    defaultLevel: 3,
+                                    levels: [1, 2, 3, 4, 5, 6], // Ajout du H1
+                                    defaultLevel: 2,
                                 },
-                                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                                inlineToolbar: ['bold', 'italic', 'Color', 'Marker', 'InlineLink'],
                                 tunes: ['alignmentTune'],
                             },
                             list: {
                                 // @ts-expect-error - EditorJS types compatibility
                                 class: List,
-                                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                                inlineToolbar: ['bold', 'italic', 'Color', 'Marker', 'InlineLink'],
                                 tunes: ['alignmentTune'],
                             },
                             code: Code,
@@ -1057,12 +1399,17 @@ const props = defineProps({
             accent_color: '#10b981',
         }),
     },
+    aiWordCount: {
+        type: Number,
+        default: 700,
+    },
 });
 
-const emit = defineEmits(['update:content']);
+const emit = defineEmits(['update:content', 'update:wordCount', 'update:aiWordCount']);
 const editorContainer = ref<HTMLElement | null>(null);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const editor = ref<any | null>(null);
+const wordCount = ref(0);
 
 // Utiliser les couleurs du site passées en props ou les valeurs par défaut
 const siteColors = computed(() => ({
@@ -1070,6 +1417,63 @@ const siteColors = computed(() => ({
     secondary: props.siteColors?.secondary_color || '#6b7280',
     accent: props.siteColors?.accent_color || '#10b981',
 }));
+
+// Fonction pour compter les mots dans le contenu EditorJS
+const countWords = (editorData: any) => {
+    if (!editorData || !editorData.blocks) return 0;
+    
+    let totalWords = 0;
+    
+    editorData.blocks.forEach((block: any) => {
+        let text = '';
+        
+        switch (block.type) {
+            case 'paragraph':
+            case 'header':
+                text = block.data.text || '';
+                break;
+            case 'list':
+                if (block.data.items) {
+                    text = block.data.items.join(' ');
+                }
+                break;
+            case 'quote':
+                text = (block.data.text || '') + ' ' + (block.data.caption || '');
+                break;
+            case 'button':
+                text = block.data.text || '';
+                break;
+            case 'columns':
+                if (block.data.columns) {
+                    block.data.columns.forEach((column: any) => {
+                        if (column.blocks) {
+                            const columnData = { blocks: column.blocks };
+                            totalWords += countWords(columnData);
+                        }
+                    });
+                }
+                return; // On return ici car on a déjà compté dans la récursion
+            default:
+                break;
+        }
+        
+        // Nettoyer le HTML et compter les mots
+        if (text) {
+            const cleanText = text
+                .replace(/<[^>]*>/g, '') // Supprimer les balises HTML
+                .replace(/&nbsp;/g, ' ') // Remplacer les espaces insécables
+                .replace(/\s+/g, ' ') // Remplacer les espaces multiples
+                .trim();
+            
+            if (cleanText) {
+                const words = cleanText.split(' ').filter(word => word.length > 0);
+                totalWords += words.length;
+            }
+        }
+    });
+    
+    return totalWords;
+};
 
 const initializeEditor = () => {
     if (!editorContainer.value) return;
@@ -1127,27 +1531,30 @@ const initializeEditor = () => {
             paragraph: {
                 // @ts-expect-error - EditorJS types compatibility
                 class: Paragraph,
-                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                inlineToolbar: ['bold', 'italic', 'Color', 'Marker', 'InlineLink'],
                 tunes: ['alignmentTune'],
             },
             Color: {
                 class: CustomColorTool,
                 config: colorConfig,
             },
+            InlineLink: {
+                class: InlineLinkTool,
+            },
             header: {
                 // @ts-expect-error - EditorJS types compatibility
                 class: Header,
                 config: {
-                    levels: [2, 3, 4, 5, 6],
-                    defaultLevel: 3,
+                    levels: [1, 2, 3, 4, 5, 6], // Ajout du H1
+                    defaultLevel: 2,
                 },
-                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                inlineToolbar: ['bold', 'italic', 'Color', 'Marker', 'InlineLink'],
                 tunes: ['alignmentTune'],
             },
             list: {
                 // @ts-expect-error - EditorJS types compatibility
                 class: List,
-                inlineToolbar: ['bold', 'italic', 'Color', 'Marker'],
+                inlineToolbar: ['bold', 'italic', 'Color', 'Marker', 'InlineLink'],
                 tunes: ['alignmentTune'],
             },
             code: Code,
@@ -1288,11 +1695,23 @@ const initializeEditor = () => {
             const outputData = await editor.value?.save();
             if (outputData) {
                 emit('update:content', JSON.stringify(outputData));
+                
+                // Compter les mots et émettre la mise à jour
+                const currentWordCount = countWords(outputData);
+                wordCount.value = currentWordCount;
+                emit('update:wordCount', currentWordCount);
             }
         },
     });
 
     console.log('✅ Editor initialized successfully');
+    
+    // Compter les mots du contenu initial
+    if (initialData && initialData.blocks) {
+        const initialWordCount = countWords(initialData);
+        wordCount.value = initialWordCount;
+        emit('update:wordCount', initialWordCount);
+    }
 };
 
 onMounted(() => {
@@ -1342,11 +1761,476 @@ onBeforeUnmount(() => {
         editor.value = null;
     }
 });
+
+// Exposer l'instance de l'éditeur et le compteur de mots vers le composant parent
+defineExpose({
+    editor,
+    wordCount
+});
+
+// Plugin de lien inline amélioré
+class InlineLinkTool {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    api: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    config: any;
+    button: HTMLElement | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    currentSelection: any = null;
+
+    static get isInline() {
+        return true;
+    }
+
+    static get title() {
+        return 'Lien';
+    }
+
+    static get sanitize() {
+        return {
+            a: {
+                href: true,
+                target: true,
+                rel: true,
+            },
+        };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor({ api, config }: any) {
+        this.api = api;
+        this.config = config || {};
+        this.setupLinkHoverSystem();
+    }
+
+    render() {
+        this.button = document.createElement('button');
+        (this.button as HTMLButtonElement).type = 'button';
+        this.button.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 12l2 2l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M10 9a3 3 0 1 1 0 6m4-6a3 3 0 1 1 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 1v6m0 6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+        `;
+        this.button.classList.add('ce-inline-tool');
+        this.button.title = 'Créer un lien';
+
+        this.button.addEventListener('click', () => {
+            this.showLinkDialog();
+        });
+
+        return this.button;
+    }
+
+    surround() {
+        // Cette méthode sera appelée quand on clique sur le bouton
+        return;
+    }
+
+    checkState() {
+        const selection = this.api.selection.findParentTag('A');
+        return !!selection;
+    }
+
+    // Nouveau système de survol pour les liens existants
+    setupLinkHoverSystem() {
+        // Attendre que le DOM soit prêt
+        setTimeout(() => {
+            this.addLinkHoverListeners();
+        }, 1000);
+    }
+
+    addLinkHoverListeners() {
+        // Observer les changements dans l'éditeur pour détecter les nouveaux liens
+        const observer = new MutationObserver(() => {
+            this.attachHoverToLinks();
+        });
+
+        // Observer l'éditeur
+        const editorElement = document.querySelector('.codex-editor');
+        if (editorElement) {
+            observer.observe(editorElement, {
+                childList: true,
+                subtree: true,
+            });
+        }
+
+        // Attacher immédiatement aux liens existants
+        this.attachHoverToLinks();
+    }
+
+    attachHoverToLinks() {
+        const links = document.querySelectorAll('.ce-block__content a[href]');
+        links.forEach(link => {
+            const htmlLink = link as HTMLElement;
+            if (!htmlLink.dataset.hoverSetup) {
+                htmlLink.dataset.hoverSetup = 'true';
+                this.setupLinkHover(htmlLink);
+            }
+        });
+    }
+
+    setupLinkHover(link: HTMLElement) {
+        let hoverTimeout: number;
+        let tooltip: HTMLElement | null = null;
+
+        link.addEventListener('mouseenter', () => {
+            hoverTimeout = setTimeout(() => {
+                tooltip = this.createLinkTooltip(link);
+                document.body.appendChild(tooltip);
+                this.positionTooltip(tooltip, link);
+            }, 500) as unknown as number;
+        });
+
+        link.addEventListener('mouseleave', () => {
+            clearTimeout(hoverTimeout);
+            if (tooltip) {
+                tooltip.remove();
+                tooltip = null;
+            }
+        });
+
+        // Empêcher la suppression du tooltip quand on survole le tooltip lui-même
+        link.addEventListener('click', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                // Permettre Ctrl+Click pour ouvrir le lien
+                return;
+            }
+            e.preventDefault();
+            this.editExistingLink(link);
+        });
+    }
+
+    createLinkTooltip(link: HTMLElement): HTMLElement {
+        const href = link.getAttribute('href') || '';
+        const tooltip = document.createElement('div');
+        tooltip.className = 'link-hover-tooltip';
+        tooltip.style.cssText = `
+            position: fixed;
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 8px 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            font-size: 12px;
+            color: #374151;
+            max-width: 300px;
+            word-break: break-all;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: tooltipAppear 0.2s ease-out;
+        `;
+
+        tooltip.innerHTML = `
+            <span class="truncate">${href}</span>
+            <button type="button" class="edit-link-btn" style="
+                background: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-size: 10px;
+                cursor: pointer;
+                flex-shrink: 0;
+                transition: background-color 0.2s ease;
+            ">
+                ✏️ Edit
+            </button>
+        `;
+
+        const editBtn = tooltip.querySelector('.edit-link-btn');
+        editBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            tooltip.remove();
+            this.editExistingLink(link);
+        });
+
+        return tooltip;
+    }
+
+    positionTooltip(tooltip: HTMLElement, link: HTMLElement) {
+        const linkRect = link.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+
+        let left = linkRect.left + (linkRect.width / 2) - (tooltipRect.width / 2);
+        let top = linkRect.top - tooltipRect.height - 8;
+
+        // Ajuster si le tooltip sort de l'écran
+        if (left < 10) left = 10;
+        if (left + tooltipRect.width > window.innerWidth - 10) {
+            left = window.innerWidth - tooltipRect.width - 10;
+        }
+        if (top < 10) {
+            top = linkRect.bottom + 8;
+        }
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+    }
+
+    editExistingLink(link: HTMLElement) {
+        const href = link.getAttribute('href') || '';
+        const target = link.getAttribute('target') || '_self';
+        const text = link.textContent || '';
+
+        // Sélectionner le lien
+        const range = document.createRange();
+        range.selectNodeContents(link);
+        const selection = window.getSelection();
+        if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+
+        // Montrer le dialog avec les valeurs pré-remplies
+        this.showLinkDialog(href, target === '_blank', text);
+    }
+
+    showLinkDialog(existingUrl = '', existingNewTab = false, existingText = '') {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+
+        const range = selection.getRangeAt(0);
+        let selectedText = existingText || range.toString();
+
+        // Si on édite un lien existant et qu'il n'y a pas de texte sélectionné
+        if (!selectedText && existingUrl) {
+            const parentLink = range.commonAncestorContainer.parentElement;
+            if (parentLink && parentLink.tagName === 'A') {
+                selectedText = parentLink.textContent || '';
+            }
+        }
+
+        if (!selectedText && !existingUrl) {
+            alert('Veuillez sélectionner du texte pour créer un lien');
+            return;
+        }
+
+        // Créer le modal de lien
+        const modal = document.createElement('div');
+        modal.className = 'inline-link-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            min-width: 400px;
+            backdrop-filter: blur(10px);
+        `;
+
+        modal.innerHTML = `
+            <div style="margin-bottom: 16px;">
+                <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600; color: #1f2937;">
+                    🔗 ${existingUrl ? 'Modifier le lien' : 'Créer un lien'}
+                </h3>
+                <p style="margin: 0; color: #6b7280; font-size: 14px;">Texte: "${selectedText}"</p>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #374151; font-size: 14px;">URL du lien:</label>
+                <input type="text" id="linkUrl" placeholder="https://exemple.com ou /page-interne" value="${existingUrl}"
+                    style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">
+                    💡 Liens internes: /article-slug ou externes: https://site.com
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #374151;">
+                    <input type="checkbox" id="openNewTab" ${existingNewTab ? 'checked' : ''} style="margin: 0;">
+                    Ouvrir dans un nouvel onglet (recommandé pour liens externes)
+                </label>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                ${existingUrl ? `
+                <button type="button" id="deleteLink" 
+                    style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                    🗑️ Supprimer
+                </button>
+                ` : ''}
+                <button type="button" id="cancelLink" 
+                    style="padding: 8px 16px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                    Annuler
+                </button>
+                <button type="button" id="createLink" 
+                    style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                    ${existingUrl ? 'Modifier' : 'Créer'} le lien
+                </button>
+            </div>
+        `;
+
+        // Ajouter l'overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+        `;
+
+        document.body.appendChild(overlay);
+        document.body.appendChild(modal);
+
+        // Focus sur le champ URL
+        const urlInput = modal.querySelector('#linkUrl') as HTMLInputElement;
+        urlInput.focus();
+        urlInput.select();
+
+        // Gestionnaires d'événements
+        const createBtn = modal.querySelector('#createLink') as HTMLButtonElement;
+        const cancelBtn = modal.querySelector('#cancelLink') as HTMLButtonElement;
+        const deleteBtn = modal.querySelector('#deleteLink') as HTMLButtonElement;
+        const newTabCheckbox = modal.querySelector('#openNewTab') as HTMLInputElement;
+
+        const closeModal = () => {
+            document.body.removeChild(overlay);
+            document.body.removeChild(modal);
+        };
+
+        // Détecter automatiquement les liens externes
+        urlInput.addEventListener('input', () => {
+            const url = urlInput.value;
+            if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                newTabCheckbox.checked = true;
+            } else {
+                newTabCheckbox.checked = false;
+            }
+        });
+
+        createBtn.addEventListener('click', () => {
+            const url = urlInput.value.trim();
+            if (!url) {
+                alert('Veuillez saisir une URL');
+                return;
+            }
+
+            this.createOrUpdateLink(range, selectedText, url, newTabCheckbox.checked, existingUrl ? 'update' : 'create');
+            closeModal();
+        });
+
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                this.removeLink(range);
+                closeModal();
+            });
+        }
+
+        cancelBtn.addEventListener('click', closeModal);
+        overlay.addEventListener('click', closeModal);
+
+        // Créer le lien avec Enter
+        urlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                createBtn.click();
+            } else if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    createOrUpdateLink(range: Range, text: string, url: string, openNewTab: boolean, action: 'create' | 'update') {
+        if (action === 'update') {
+            // Trouver le lien parent et le modifier
+            const parentLink = range.commonAncestorContainer.parentElement;
+            if (parentLink && parentLink.tagName === 'A') {
+                parentLink.setAttribute('href', url);
+                if (openNewTab) {
+                    parentLink.setAttribute('target', '_blank');
+                    parentLink.setAttribute('rel', 'noopener noreferrer');
+                } else {
+                    parentLink.removeAttribute('target');
+                    parentLink.removeAttribute('rel');
+                }
+                return;
+            }
+        }
+
+        // Créer un nouveau lien
+        range.deleteContents();
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.textContent = text;
+        
+        if (openNewTab) {
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+        }
+
+        // Ajouter des styles pour les liens
+        link.style.cssText = `
+            color: #3b82f6;
+            text-decoration: underline;
+            transition: color 0.2s ease;
+        `;
+
+        // Insérer le lien
+        range.insertNode(link);
+
+        // Sélectionner le nouveau lien
+        const newRange = document.createRange();
+        newRange.selectNodeContents(link);
+        const selection = window.getSelection();
+        if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+        }
+
+        // Configurer le hover pour le nouveau lien
+        setTimeout(() => {
+            this.setupLinkHover(link);
+        }, 100);
+    }
+
+    removeLink(range: Range) {
+        const parentLink = range.commonAncestorContainer.parentElement;
+        if (parentLink && parentLink.tagName === 'A') {
+            const parent = parentLink.parentNode;
+            if (parent) {
+                while (parentLink.firstChild) {
+                    parent.insertBefore(parentLink.firstChild, parentLink);
+                }
+                parent.removeChild(parentLink);
+            }
+        }
+    }
+}
+
+// Fonction pour vérifier si on survole un titre
 </script>
 
 <template>
     <div>
         <div ref="editorContainer" class="container min-h-[300px] w-full rounded-md border p-4"></div>
+        
+        <!-- Compteur de mots -->
+        <div class="word-counter">
+            <div class="word-counter__content">
+                <span class="word-counter__icon">📝</span>
+                <span class="word-counter__text">{{ wordCount }} mot{{ wordCount > 1 ? 's' : '' }}</span>
+                <div class="word-counter__bar">
+                    <div 
+                        class="word-counter__progress" 
+                        :style="{ width: Math.min((wordCount / props.aiWordCount) * 100, 100) + '%' }"
+                    ></div>
+                </div>
+                <span class="word-counter__target">Objectif IA: {{ props.aiWordCount }} mots</span>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -1360,59 +2244,203 @@ onBeforeUnmount(() => {
     max-width: 100% !important;
 }
 
-/* Styles pour les boutons personnalisés (Block Tool) */
+/* Styles pour les boutons personnalisés (Block Tool) - Version améliorée */
 .button-tool {
-    padding: 10px 0;
+    padding: 16px;
+    border: 1px solid #e1e5e9;
+    border-radius: 12px;
+    background: #f8f9fa;
+    margin: 12px 0;
+    display: block !important; /* Forcer l'affichage */
+    visibility: visible !important;
+}
+
+.button-tool__preview {
+    text-align: center;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e1e5e9;
+    display: block !important;
 }
 
 .button-tool__btn {
-    display: inline-block;
-    padding: 8px 16px;
-    font-size: 14px;
-    border-radius: 4px;
+    display: inline-block !important;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: center;
-    margin-bottom: 10px;
+    text-decoration: none;
+    border: 2px solid transparent;
+    min-width: 160px;
+    visibility: visible !important;
 }
 
-/* Styles dynamiques pour les boutons basés sur les couleurs du site */
+.button-tool__form {
+    display: grid;
+    gap: 16px;
+}
+
+.button-tool__group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.button-tool__label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 4px;
+}
+
+.button-tool__input,
+.button-tool__select {
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+    background: white;
+}
+
+.button-tool__input:focus,
+.button-tool__select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.button-tool__suggestions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.button-tool__suggestion {
+    padding: 8px 12px;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.button-tool__suggestion:hover {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Styles dynamiques pour les boutons basés sur les couleurs du site - Version étendue */
 .button-tool__btn--primary {
     background-color: v-bind('siteColors?.primary || "#4E8D44"');
     color: white;
-    border: none;
+    border-color: v-bind('siteColors?.primary || "#4E8D44"');
+}
+
+.button-tool__btn--primary:hover {
+    background-color: color-mix(in srgb, v-bind('siteColors?.primary || "#4E8D44"') 85%, black);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .button-tool__btn--secondary {
     background-color: v-bind('siteColors?.secondary || "#6b7280"');
     color: white;
-    border: none;
+    border-color: v-bind('siteColors?.secondary || "#6b7280"');
 }
 
-.button-tool__btn--accent {
-    background-color: v-bind('siteColors?.accent || "#10b981"');
+.button-tool__btn--secondary:hover {
+    background-color: color-mix(in srgb, v-bind('siteColors?.secondary || "#6b7280"') 85%, black);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.button-tool__btn--success {
+    background-color: #22c55e;
     color: white;
-    border: none;
+    border-color: #22c55e;
+}
+
+.button-tool__btn--success:hover {
+    background-color: #16a34a;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.button-tool__btn--warning {
+    background-color: #f59e0b;
+    color: white;
+    border-color: #f59e0b;
+}
+
+.button-tool__btn--warning:hover {
+    background-color: #d97706;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
 .button-tool__btn--danger {
     background-color: #ef4444;
     color: white;
-    border: none;
+    border-color: #ef4444;
 }
 
-.button-tool__inputs {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+.button-tool__btn--danger:hover {
+    background-color: #dc2626;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
-.button-tool__input,
-.button-tool__select {
-    padding: 6px 8px;
-    border: 1px solid #d1d5db;
-    border-radius: 4px;
-    font-size: 14px;
+.button-tool__btn--outline {
+    background-color: transparent;
+    color: v-bind('siteColors?.primary || "#4E8D44"');
+    border-color: v-bind('siteColors?.primary || "#4E8D44"');
+}
+
+.button-tool__btn--outline:hover {
+    background-color: v-bind('siteColors?.primary || "#4E8D44"');
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Animation pour l'apparition des boutons */
+@keyframes buttonAppear {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.button-tool {
+    animation: buttonAppear 0.3s ease-out;
+}
+
+/* Responsive pour les boutons */
+@media (max-width: 768px) {
+    .button-tool__suggestions {
+        grid-template-columns: 1fr;
+    }
+    
+    .button-tool__btn {
+        width: 100%;
+        padding: 14px 20px;
+        font-size: 15px;
+    }
 }
 
 /* Styles pour l'alignement du texte appliqué aux blocs */
@@ -1828,5 +2856,476 @@ onBeforeUnmount(() => {
     .advanced-column .codex-editor {
         min-height: 120px !important;
     }
+}
+
+/* Styles pour différencier les niveaux de titres dans l'éditeur avec indicateurs visuels */
+
+/* Styles de base pour tous les titres */
+.ce-block__content .ce-header {
+    font-weight: 600 !important;
+    line-height: 1.3 !important;
+    margin: 16px 0 12px 0 !important;
+    transition: all 0.2s ease !important;
+    position: relative !important;
+    padding-left: 45px !important; /* Espace pour l'indicateur */
+}
+
+/* Indicateur visuel du niveau de titre */
+.ce-block__content .ce-header::before {
+    content: "H" !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+    color: white !important;
+    font-size: 10px !important;
+    font-weight: bold !important;
+    padding: 2px 6px !important;
+    border-radius: 12px !important;
+    font-family: monospace !important;
+    min-width: 24px !important;
+    text-align: center !important;
+    z-index: 1 !important;
+}
+
+/* Contenus spécifiques pour chaque niveau */
+.ce-block__content h1.ce-header::before {
+    content: "H1" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.ce-block__content h2.ce-header::before {
+    content: "H2" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.ce-block__content h3.ce-header::before {
+    content: "H3" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.ce-block__content h4.ce-header::before {
+    content: "H4" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.ce-block__content h5.ce-header::before {
+    content: "H5" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.ce-block__content h6.ce-header::before {
+    content: "H6" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+/* Effet hover pour les titres */
+.ce-block__content .ce-header:hover {
+    transform: translateX(2px) !important;
+    cursor: text !important;
+}
+
+.ce-block__content .ce-header:hover::before {
+    transform: translateY(-50%) scale(1.1) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* H1 - Titre principal de page */
+.ce-block__content h1.ce-header {
+    font-size: 32px !important;
+    color: v-bind('siteColors?.primary || "#4E8D44"') !important;
+    margin-top: 0 !important;
+    margin-bottom: 24px !important;
+    font-weight: 700 !important;
+}
+
+/* H2 - Titre principal de section */
+.ce-block__content h2.ce-header {
+    font-size: 28px !important;
+    color: v-bind('siteColors?.primary || "#4E8D44"') !important;
+    margin-top: 24px !important;
+    margin-bottom: 16px !important;
+}
+
+/* H3 - Sous-titre de section */
+.ce-block__content h3.ce-header {
+    font-size: 22px !important;
+    color: #374151 !important;
+    margin-top: 20px !important;
+    margin-bottom: 12px !important;
+}
+
+/* H4 - Titre de sous-section */
+.ce-block__content h4.ce-header {
+    font-size: 18px !important;
+    color: #4b5563 !important;
+    margin-top: 16px !important;
+    margin-bottom: 10px !important;
+    font-weight: 500 !important;
+    text-decoration: underline !important;
+    text-decoration-color: v-bind('siteColors?.accent || "#10b981"') !important;
+    text-decoration-thickness: 2px !important;
+    text-underline-offset: 4px !important;
+}
+
+/* H5 - Petit titre */
+.ce-block__content h5.ce-header {
+    font-size: 16px !important;
+    color: #6b7280 !important;
+    margin-top: 14px !important;
+    margin-bottom: 8px !important;
+    font-weight: 500 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+
+/* H6 - Le plus petit titre */
+.ce-block__content h6.ce-header {
+    font-size: 14px !important;
+    color: #9ca3af !important;
+    margin-top: 12px !important;
+    margin-bottom: 6px !important;
+    font-weight: 400 !important;
+    font-style: italic !important;
+}
+
+/* Styles pour les titres dans les colonnes également */
+.advanced-column .ce-block__content .ce-header {
+    padding-left: 35px !important; /* Espace réduit dans les colonnes */
+}
+
+.advanced-column .ce-block__content .ce-header::before {
+    content: "H" !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+    color: white !important;
+    font-size: 9px !important;
+    font-weight: bold !important;
+    padding: 1px 4px !important;
+    border-radius: 8px !important;
+    font-family: monospace !important;
+    min-width: 20px !important;
+    text-align: center !important;
+}
+
+.advanced-column .ce-block__content h1.ce-header {
+    font-size: 24px !important;
+    color: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.advanced-column .ce-block__content h2.ce-header {
+    font-size: 20px !important;
+    color: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.advanced-column .ce-block__content h3.ce-header {
+    font-size: 18px !important;
+    color: #374151 !important;
+}
+
+.advanced-column .ce-block__content h4.ce-header {
+    font-size: 16px !important;
+    color: #4b5563 !important;
+    text-decoration: underline !important;
+    text-decoration-color: v-bind('siteColors?.accent || "#10b981"') !important;
+}
+
+.advanced-column .ce-block__content h5.ce-header {
+    font-size: 14px !important;
+    color: #6b7280 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.3px !important;
+}
+
+.advanced-column .ce-block__content h6.ce-header {
+    font-size: 13px !important;
+    color: #9ca3af !important;
+    font-style: italic !important;
+}
+
+/* Badges spécifiques pour les colonnes */
+.advanced-column .ce-block__content h1.ce-header::before {
+    content: "H1" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.advanced-column .ce-block__content h2.ce-header::before {
+    content: "H2" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.advanced-column .ce-block__content h3.ce-header::before {
+    content: "H3" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.advanced-column .ce-block__content h4.ce-header::before {
+    content: "H4" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.advanced-column .ce-block__content h5.ce-header::before {
+    content: "H5" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+.advanced-column .ce-block__content h6.ce-header::before {
+    content: "H6" !important;
+    background: v-bind('siteColors?.primary || "#4E8D44"') !important;
+}
+
+/* Styles pour le système de hover des liens */
+.link-hover-tooltip {
+    position: fixed !important;
+    background: white !important;
+    border: 1px solid #e1e5e9 !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    z-index: 10000 !important;
+    font-size: 12px !important;
+    color: #374151 !important;
+    max-width: 300px !important;
+    word-break: break-all !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    animation: tooltipAppear 0.2s ease-out !important;
+}
+
+.link-hover-tooltip .edit-link-btn {
+    background: #3b82f6 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 4px !important;
+    padding: 2px 6px !important;
+    font-size: 10px !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    transition: background-color 0.2s ease !important;
+}
+
+.link-hover-tooltip .edit-link-btn:hover {
+    background: #2563eb !important;
+}
+
+/* Animation pour l'apparition du tooltip */
+@keyframes tooltipAppear {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Améliorer les liens dans l'éditeur */
+.ce-block__content a[href] {
+    color: #3b82f6 !important;
+    text-decoration: underline !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+    position: relative !important;
+}
+
+.ce-block__content a[href]:hover {
+    color: #2563eb !important;
+    text-decoration: underline !important;
+}
+
+/* Styles pour les tooltips CTA (différents des liens) */
+.cta-hover-tooltip {
+    position: fixed !important;
+    background: #f59e0b !important;
+    color: white !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    z-index: 10000 !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    animation: tooltipAppear 0.2s ease-out !important;
+    border: 2px solid #d97706 !important;
+}
+
+.cta-hover-tooltip .edit-cta-btn {
+    background: white !important;
+    color: #f59e0b !important;
+    border: none !important;
+    border-radius: 4px !important;
+    padding: 2px 6px !important;
+    font-size: 10px !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    font-weight: bold !important;
+    transition: all 0.2s ease !important;
+}
+
+.cta-hover-tooltip .edit-cta-btn:hover {
+    background: #fef3c7 !important;
+    transform: scale(1.05) !important;
+}
+
+/* Badge CTA pour différencier des liens */
+.cta-badge {
+    position: absolute !important;
+    top: -8px !important;
+    right: -8px !important;
+    background: #f59e0b !important;
+    color: white !important;
+    font-size: 10px !important;
+    font-weight: bold !important;
+    padding: 2px 6px !important;
+    border-radius: 8px !important;
+    font-family: monospace !important;
+    z-index: 2 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Styles pour le mode édition des CTA */
+.button-tool__edit {
+    border: 2px dashed #f59e0b !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    background: #fef3c7 !important;
+}
+
+.button-tool__save {
+    background: #22c55e !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: background-color 0.2s ease !important;
+}
+
+.button-tool__save:hover {
+    background: #16a34a !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Styles pour le compteur de mots */
+.word-counter {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.word-counter__content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.word-counter__icon {
+    font-size: 18px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.word-counter__text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    min-width: 80px;
+}
+
+.word-counter__bar {
+    flex: 1;
+    min-width: 120px;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.word-counter__progress {
+    height: 100%;
+    background: linear-gradient(90deg, v-bind('siteColors?.primary || "#4E8D44"') 0%, #22c55e 100%);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.word-counter__progress::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+    animation: shimmer 2s infinite;
+}
+
+.word-counter__target {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Animation pour l'effet de brillance */
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* Responsive pour le compteur */
+@media (max-width: 640px) {
+    .word-counter__content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .word-counter__bar {
+        width: 100%;
+        min-width: unset;
+    }
+    
+    .word-counter__text,
+    .word-counter__target {
+        align-self: stretch;
+        text-align: center;
+    }
+}
+
+/* États du compteur basés sur le pourcentage */
+.word-counter__progress[style*="width: 100%"] {
+    background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+}
+
+.word-counter__progress[style*="width: 9"]:not([style*="width: 100%"]),
+.word-counter__progress[style*="width: 8"]:not([style*="width: 100%"]) {
+    background: linear-gradient(90deg, #f59e0b 0%, #eab308 100%);
+}
+
+.word-counter:has(.word-counter__progress[style*="width: 100%"]) .word-counter__target {
+    color: #16a34a;
+    font-weight: 600;
 }
 </style>

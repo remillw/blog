@@ -230,13 +230,26 @@ class SiteController extends Controller
         ]);
     }
 
-    public function getCategories(Site $site)
+    public function getCategories(Site $site, Request $request)
     {
         if (Auth::id() !== $site->user_id) {
             abort(403);
         }
 
-        $categories = $site->categories()->get();
+        // Récupérer le paramètre de langue depuis la requête
+        $languageCode = $request->get('language');
+
+        // Utiliser la relation many-to-many via la table pivot category_site
+        $query = $site->categories();
+
+        // Si un code de langue est fourni, filtrer les catégories par langue
+        if ($languageCode) {
+            // Supposons qu'on ajoute une colonne language_code dans la table categories
+            // ou qu'on utilise une relation avec les langues
+            $query->where('language_code', $languageCode);
+        }
+
+        $categories = $query->get(['categories.id', 'categories.name', 'categories.language_code']);
         
         return response()->json($categories);
     }

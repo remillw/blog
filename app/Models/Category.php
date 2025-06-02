@@ -18,6 +18,7 @@ class Category extends Model
         'description',
         'parent_id',
         'order',
+        'language_code',
     ];
 
     protected static function boot()

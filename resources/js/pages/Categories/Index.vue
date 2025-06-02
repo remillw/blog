@@ -15,6 +15,7 @@
                     <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Description</TableHead>
+                        <TableHead>Langue</TableHead>
                         <TableHead>Sites</TableHead>
                         <TableHead class="w-[100px]">Actions</TableHead>
                     </TableRow>
@@ -23,6 +24,11 @@
                     <TableRow v-for="category in categories" :key="category.id">
                         <TableCell class="font-medium">{{ category.name }}</TableCell>
                         <TableCell>{{ category.description || 'No description' }}</TableCell>
+                        <TableCell>
+                            <Badge variant="secondary" class="font-mono">
+                                {{ getLanguageFlag(category.language_code) }} {{ getLanguageName(category.language_code) }}
+                            </Badge>
+                        </TableCell>
                         <TableCell>
                             <div class="flex flex-wrap gap-1">
                                 <Badge v-for="site in category.sites" :key="site.id" variant="outline">
@@ -106,6 +112,7 @@ interface Category {
     id: number;
     name: string;
     description: string;
+    language_code?: string;
     sites: Site[];
 }
 
@@ -175,5 +182,37 @@ function showNotification(type: 'success' | 'error', title: string, message: str
     notification.timeout = setTimeout(() => {
         notification.show = false;
     }, 3000) as unknown as number;
+}
+
+function getLanguageFlag(code?: string): string {
+    const flags: Record<string, string> = {
+        fr: '🇫🇷',
+        en: '🇬🇧', 
+        es: '🇪🇸',
+        de: '🇩🇪',
+        it: '🇮🇹',
+        pt: '🇵🇹',
+        nl: '🇳🇱',
+        ru: '🇷🇺',
+        ja: '🇯🇵',
+        zh: '🇨🇳',
+    };
+    return flags[code || 'fr'] || '🌐';
+}
+
+function getLanguageName(code?: string): string {
+    const names: Record<string, string> = {
+        fr: 'Français',
+        en: 'English',
+        es: 'Español', 
+        de: 'Deutsch',
+        it: 'Italiano',
+        pt: 'Português',
+        nl: 'Nederlands',
+        ru: 'Русский',
+        ja: '日本語',
+        zh: '中文',
+    };
+    return names[code || 'fr'] || 'Inconnu';
 }
 </script>

@@ -25,6 +25,29 @@
                 </div>
 
                 <div class="space-y-2">
+                    <Label for="language_code">Langue</Label>
+                    <Select v-model="form.language_code" :disabled="form.processing">
+                        <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner une langue" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="fr">🇫🇷 Français</SelectItem>
+                            <SelectItem value="en">🇬🇧 English</SelectItem>
+                            <SelectItem value="es">🇪🇸 Español</SelectItem>
+                            <SelectItem value="de">🇩🇪 Deutsch</SelectItem>
+                            <SelectItem value="it">🇮🇹 Italiano</SelectItem>
+                            <SelectItem value="pt">🇵🇹 Português</SelectItem>
+                            <SelectItem value="nl">🇳🇱 Nederlands</SelectItem>
+                            <SelectItem value="ru">🇷🇺 Русский</SelectItem>
+                            <SelectItem value="ja">🇯🇵 日本語</SelectItem>
+                            <SelectItem value="zh">🇨🇳 中文</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <InputError :message="form.errors.language_code" />
+                    <p class="text-xs text-gray-500">Une catégorie ne peut être que dans une seule langue</p>
+                </div>
+
+                <div class="space-y-2">
                     <Label>Sites</Label>
                     <MultiSelect
                         v-model="selectedSiteValues"
@@ -54,6 +77,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import MultiSelect from '@/components/ui/MultiSelect.vue';
 import { useRoutes } from '@/composables/useRoutes';
 import { useForm } from '@inertiajs/vue3';
@@ -73,6 +97,7 @@ interface Category {
     id: number;
     name: string;
     description: string;
+    language_code?: string;
     sites: Site[];
 }
 
@@ -96,6 +121,7 @@ const formattedSites = computed<SiteOption[]>(() => {
 const form = useForm({
     name: '',
     description: '',
+    language_code: 'fr',
     sites: [] as number[],
 });
 
@@ -118,10 +144,12 @@ watch(
         if (newCategory && 'id' in newCategory) {
             form.name = newCategory.name || '';
             form.description = newCategory.description || '';
+            form.language_code = newCategory.language_code || 'fr';
             selectedSiteValues.value = newCategory.sites?.map((s) => s.id.toString()) || [];
             form.sites = newCategory.sites?.map((s) => s.id) || [];
         } else {
             form.reset();
+            form.language_code = 'fr'; // Valeur par défaut
             selectedSiteValues.value = [];
             form.sites = [];
         }
@@ -141,6 +169,7 @@ const submit = () => {
             onSuccess: () => {
                 emit('close');
                 form.reset();
+                form.language_code = 'fr';
                 selectedSiteValues.value = [];
             },
         });
@@ -149,6 +178,7 @@ const submit = () => {
             onSuccess: () => {
                 emit('close');
                 form.reset();
+                form.language_code = 'fr';
                 selectedSiteValues.value = [];
             },
         });
@@ -158,6 +188,7 @@ const submit = () => {
 const closeModal = () => {
     emit('close');
     form.reset();
+    form.language_code = 'fr';
     selectedSiteValues.value = [];
 };
 </script>
