@@ -18,7 +18,7 @@
               :disabled="loading"
               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
-              <RefreshIcon class="w-4 h-4 mr-2" :class="{'animate-spin': loading}" />
+              <RotateCcw class="w-4 h-4 mr-2" :class="{'animate-spin': loading}" />
               Actualiser
             </button>
           </div>
@@ -147,7 +147,7 @@
               <!-- Similarité détectée -->
               <div v-if="suggestion.similar_category" class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <div class="flex items-center mb-2">
-                  <ExclamationTriangleIcon class="w-5 h-5 text-yellow-600 mr-2" />
+                  <AlertTriangle class="w-5 h-5 text-yellow-600 mr-2" />
                   <span class="text-sm font-medium text-yellow-800">
                     Similarité détectée: {{ Math.round(suggestion.similarity_score * 100) }}%
                   </span>
@@ -168,7 +168,7 @@
                   :disabled="processingIds.includes(suggestion.id)"
                   class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
                 >
-                  <CheckIcon class="w-4 h-4 mr-1" />
+                  <Check class="w-4 h-4 mr-1" />
                   Approuver
                 </button>
                 
@@ -177,7 +177,7 @@
                   :disabled="processingIds.includes(suggestion.id)"
                   class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
                 >
-                  <XMarkIcon class="w-4 h-4 mr-1" />
+                  <X class="w-4 h-4 mr-1" />
                   Rejeter
                 </button>
                 
@@ -187,7 +187,7 @@
                   :disabled="processingIds.includes(suggestion.id)"
                   class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                 >
-                  <ArrowsRightLeftIcon class="w-4 h-4 mr-1" />
+                  <ArrowLeftRight class="w-4 h-4 mr-1" />
                   Fusionner
                 </button>
               </div>
@@ -246,330 +246,296 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { usePage } from '@inertiajs/vue3'
 import { 
-  RefreshIcon, 
-  CheckIcon, 
-  XMarkIcon, 
-  ExclamationTriangleIcon, 
-  ArrowsRightLeftIcon 
-} from '@heroicons/vue/24/outline'
+  RotateCcw, 
+  Check, 
+  X, 
+  AlertTriangle, 
+  ArrowLeftRight 
+} from 'lucide-vue-next'
 import RejectModal from './modals/RejectModal.vue'
 import MergeModal from './modals/MergeModal.vue'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Lightbulb } from 'lucide-vue-next'
 
-export default {
-  name: 'SuggestionsManager',
-  components: {
-    RefreshIcon,
-    CheckIcon,
-    XMarkIcon,
-    ExclamationTriangleIcon,
-    ArrowsRightLeftIcon,
-    RejectModal,
-    MergeModal
-  },
-  props: {
-    userPermissions: {
-      type: Array,
-      required: true
-    }
-  },
-  emits: ['suggestion-updated'],
-  setup(props, { emit }) {
-    const authStore = useAuthStore()
-    const loading = ref(false)
-    const suggestions = ref([])
-    const pagination = ref(null)
-    const processingIds = ref([])
-    
-    const filters = reactive({
-      status: 'pending',
-      language: '',
-      high_similarity: null,
-      per_page: 20
+defineProps<{
+  userPermissions: string[]
+}>()
+
+const emit = defineEmits<{
+  'suggestion-updated': []
+}>()
+
+const page = usePage()
+const loading = ref(false)
+const suggestions = ref<any[]>([])
+const pagination = ref<any>(null)
+const processingIds = ref<number[]>([])
+
+const filters = reactive({
+  status: 'pending',
+  language: '',
+  high_similarity: null as boolean | null,
+  per_page: 20
+})
+
+// États des modals
+const showRejectModalState = ref(false)
+const showMergeModalState = ref(false)
+const selectedSuggestion = ref<any>(null)
+
+// Charger les suggestions
+const loadSuggestions = async (page = 1) => {
+  loading.value = true
+  try {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      ...Object.fromEntries(
+        Object.entries(filters).filter(([_, value]) => value !== '' && value !== null)
+      )
     })
 
-    // États des modals
-    const showRejectModalState = ref(false)
-    const showMergeModalState = ref(false)
-    const selectedSuggestion = ref(null)
-
-    // Charger les suggestions
-    const loadSuggestions = async (page = 1) => {
-      loading.value = true
-      try {
-        const params = new URLSearchParams({
-          page: page.toString(),
-          ...Object.fromEntries(
-            Object.entries(filters).filter(([_, value]) => value !== '' && value !== null)
-          )
-        })
-
-        const response = await fetch(`/api/admin/suggestions?${params}`, {
-          headers: {
-            'Authorization': `Bearer ${authStore.token}`,
-            'Content-Type': 'application/json'
-          }
-        })
-
-        if (!response.ok) throw new Error('Erreur de chargement')
-
-        const data = await response.json()
-        if (data.success) {
-          suggestions.value = data.data.data
-          pagination.value = {
-            current_page: data.data.current_page,
-            last_page: data.data.last_page,
-            from: data.data.from,
-            to: data.data.to,
-            total: data.data.total
-          }
-        }
-      } catch (error) {
-        console.error('Erreur:', error)
-      } finally {
-        loading.value = false
+    const response = await fetch(`/api/admin/suggestions?${params}`, {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
       }
-    }
-
-    // Calculer les pages visibles pour la pagination
-    const visiblePages = computed(() => {
-      if (!pagination.value) return []
-      
-      const current = pagination.value.current_page
-      const last = pagination.value.last_page
-      const pages = []
-      
-      for (let i = Math.max(1, current - 2); i <= Math.min(last, current + 2); i++) {
-        pages.push(i)
-      }
-      
-      return pages
     })
 
-    // Navigation de pagination
-    const goToPage = (page) => {
-      if (page !== pagination.value.current_page) {
-        loadSuggestions(page)
+    if (!response.ok) throw new Error('Erreur de chargement')
+
+    const data = await response.json()
+    if (data.success) {
+      suggestions.value = data.data.data
+      pagination.value = {
+        current_page: data.data.current_page,
+        last_page: data.data.last_page,
+        from: data.data.from,
+        to: data.data.to,
+        total: data.data.total
       }
     }
-
-    // Approuver une suggestion
-    const approveSuggestion = async (suggestion) => {
-      processingIds.value.push(suggestion.id)
-      try {
-        const response = await fetch(`/api/admin/suggestions/${suggestion.id}/approve`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authStore.token}`,
-            'Content-Type': 'application/json'
-          }
-        })
-
-        if (!response.ok) throw new Error('Erreur d\'approbation')
-
-        const data = await response.json()
-        if (data.success) {
-          // Actualiser la liste
-          await loadSuggestions(pagination.value.current_page)
-          emit('suggestion-updated')
-        }
-      } catch (error) {
-        console.error('Erreur:', error)
-      } finally {
-        processingIds.value = processingIds.value.filter(id => id !== suggestion.id)
-      }
-    }
-
-    // Afficher le modal de rejet
-    const showRejectModal = (suggestion) => {
-      selectedSuggestion.value = suggestion
-      showRejectModalState.value = true
-    }
-
-    // Gérer le rejet
-    const handleReject = async ({ reason }) => {
-      const suggestion = selectedSuggestion.value
-      processingIds.value.push(suggestion.id)
-      
-      try {
-        const response = await fetch(`/api/admin/suggestions/${suggestion.id}/reject`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authStore.token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ reason })
-        })
-
-        if (!response.ok) throw new Error('Erreur de rejet')
-
-        const data = await response.json()
-        if (data.success) {
-          await loadSuggestions(pagination.value.current_page)
-          emit('suggestion-updated')
-        }
-      } catch (error) {
-        console.error('Erreur:', error)
-      } finally {
-        processingIds.value = processingIds.value.filter(id => id !== suggestion.id)
-        showRejectModalState.value = false
-        selectedSuggestion.value = null
-      }
-    }
-
-    // Afficher le modal de fusion
-    const showMergeModal = (suggestion) => {
-      selectedSuggestion.value = suggestion
-      showMergeModalState.value = true
-    }
-
-    // Gérer la fusion
-    const handleMerge = async ({ mergeWithId }) => {
-      const suggestion = selectedSuggestion.value
-      processingIds.value.push(suggestion.id)
-      
-      try {
-        const response = await fetch(`/api/admin/suggestions/${suggestion.id}/merge`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authStore.token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ merge_with_id: mergeWithId })
-        })
-
-        if (!response.ok) throw new Error('Erreur de fusion')
-
-        const data = await response.json()
-        if (data.success) {
-          await loadSuggestions(pagination.value.current_page)
-          emit('suggestion-updated')
-        }
-      } catch (error) {
-        console.error('Erreur:', error)
-      } finally {
-        processingIds.value = processingIds.value.filter(id => id !== suggestion.id)
-        showMergeModalState.value = false
-        selectedSuggestion.value = null
-      }
-    }
-
-    // Réinitialiser les filtres
-    const resetFilters = () => {
-      Object.assign(filters, {
-        status: 'pending',
-        language: '',
-        high_similarity: null,
-        per_page: 20
-      })
-      loadSuggestions()
-    }
-
-    const refreshSuggestions = () => {
-      loadSuggestions(pagination.value?.current_page || 1)
-    }
-
-    // Utilitaires d'affichage
-    const getSimilarityClass = (score) => {
-      if (score >= 0.70) return 'bg-red-100 text-red-600'
-      if (score >= 0.50) return 'bg-yellow-100 text-yellow-600'
-      return 'bg-green-100 text-green-600'
-    }
-
-    const getSimilarityIcon = (score) => {
-      if (score >= 0.70) return '⚠️'
-      if (score >= 0.50) return '⚡'
-      return '✅'
-    }
-
-    const getStatusClass = (status) => {
-      const classes = {
-        'pending': 'bg-yellow-100 text-yellow-800',
-        'approved': 'bg-green-100 text-green-800',
-        'rejected': 'bg-red-100 text-red-800',
-        'merged': 'bg-blue-100 text-blue-800'
-      }
-      return classes[status] || 'bg-gray-100 text-gray-800'
-    }
-
-    const getStatusLabel = (status) => {
-      const labels = {
-        'pending': 'En attente',
-        'approved': 'Approuvée',
-        'rejected': 'Rejetée',
-        'merged': 'Fusionnée'
-      }
-      return labels[status] || status
-    }
-
-    const getLanguageFlag = (code) => {
-      const flags = {
-        'fr': '🇫🇷', 'en': '🇬🇧', 'es': '🇪🇸', 'de': '🇩🇪', 'it': '🇮🇹'
-      }
-      return flags[code] || '🌐'
-    }
-
-    const formatRelativeTime = (datetime) => {
-      const date = new Date(datetime)
-      const now = new Date()
-      const diffInMinutes = Math.floor((now - date) / (1000 * 60))
-      
-      if (diffInMinutes < 1) return 'À l\'instant'
-      if (diffInMinutes < 60) return `Il y a ${diffInMinutes}min`
-      
-      const diffInHours = Math.floor(diffInMinutes / 60)
-      if (diffInHours < 24) return `Il y a ${diffInHours}h`
-      
-      const diffInDays = Math.floor(diffInHours / 24)
-      return `Il y a ${diffInDays}j`
-    }
-
-    const formatDate = (datetime) => {
-      return new Date(datetime).toLocaleDateString('fr-FR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    }
-
-    onMounted(() => {
-      loadSuggestions()
-    })
-
-    return {
-      loading,
-      suggestions,
-      pagination,
-      filters,
-      processingIds,
-      visiblePages,
-      showRejectModalState,
-      showMergeModalState,
-      selectedSuggestion,
-      loadSuggestions,
-      goToPage,
-      approveSuggestion,
-      showRejectModal,
-      handleReject,
-      showMergeModal,
-      handleMerge,
-      resetFilters,
-      refreshSuggestions,
-      getSimilarityClass,
-      getSimilarityIcon,
-      getStatusClass,
-      getStatusLabel,
-      getLanguageFlag,
-      formatRelativeTime,
-      formatDate
-    }
+  } catch (error) {
+    console.error('Erreur:', error)
+  } finally {
+    loading.value = false
   }
 }
+
+// Calculer les pages visibles pour la pagination
+const visiblePages = computed(() => {
+  if (!pagination.value) return []
+  
+  const current = pagination.value.current_page
+  const last = pagination.value.last_page
+  const pages = []
+  
+  for (let i = Math.max(1, current - 2); i <= Math.min(last, current + 2); i++) {
+    pages.push(i)
+  }
+  
+  return pages
+})
+
+// Navigation de pagination
+const goToPage = (page: number) => {
+  if (page !== pagination.value.current_page) {
+    loadSuggestions(page)
+  }
+}
+
+// Approuver une suggestion
+const approveSuggestion = async (suggestion: any) => {
+  processingIds.value.push(suggestion.id)
+  try {
+    const response = await fetch(`/api/admin/suggestions/${suggestion.id}/approve`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+      }
+    })
+
+    if (!response.ok) throw new Error('Erreur d\'approbation')
+
+    const data = await response.json()
+    if (data.success) {
+      await loadSuggestions(pagination.value.current_page)
+      emit('suggestion-updated')
+    }
+  } catch (error) {
+    console.error('Erreur:', error)
+  } finally {
+    processingIds.value = processingIds.value.filter(id => id !== suggestion.id)
+  }
+}
+
+// Afficher le modal de rejet
+const showRejectModal = (suggestion: any) => {
+  selectedSuggestion.value = suggestion
+  showRejectModalState.value = true
+}
+
+// Gérer le rejet
+const handleReject = async ({ reason }: { reason: string }) => {
+  const suggestion = selectedSuggestion.value
+  processingIds.value.push(suggestion.id)
+  
+  try {
+    const response = await fetch(`/api/admin/suggestions/${suggestion.id}/reject`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+      },
+      body: JSON.stringify({ reason })
+    })
+
+    if (!response.ok) throw new Error('Erreur de rejet')
+
+    const data = await response.json()
+    if (data.success) {
+      await loadSuggestions(pagination.value.current_page)
+      emit('suggestion-updated')
+    }
+  } catch (error) {
+    console.error('Erreur:', error)
+  } finally {
+    processingIds.value = processingIds.value.filter(id => id !== suggestion.id)
+    showRejectModalState.value = false
+    selectedSuggestion.value = null
+  }
+}
+
+// Afficher le modal de fusion
+const showMergeModal = (suggestion: any) => {
+  selectedSuggestion.value = suggestion
+  showMergeModalState.value = true
+}
+
+// Gérer la fusion
+const handleMerge = async ({ mergeWithId }: { mergeWithId: number }) => {
+  const suggestion = selectedSuggestion.value
+  processingIds.value.push(suggestion.id)
+  
+  try {
+    const response = await fetch(`/api/admin/suggestions/${suggestion.id}/merge`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+      },
+      body: JSON.stringify({ merge_with_id: mergeWithId })
+    })
+
+    if (!response.ok) throw new Error('Erreur de fusion')
+
+    const data = await response.json()
+    if (data.success) {
+      await loadSuggestions(pagination.value.current_page)
+      emit('suggestion-updated')
+    }
+  } catch (error) {
+    console.error('Erreur:', error)
+  } finally {
+    processingIds.value = processingIds.value.filter(id => id !== suggestion.id)
+    showMergeModalState.value = false
+    selectedSuggestion.value = null
+  }
+}
+
+// Réinitialiser les filtres
+const resetFilters = () => {
+  Object.assign(filters, {
+    status: 'pending',
+    language: '',
+    high_similarity: null,
+    per_page: 20
+  })
+  loadSuggestions()
+}
+
+const refreshSuggestions = () => {
+  loadSuggestions(pagination.value?.current_page || 1)
+}
+
+// Utilitaires d'affichage
+const getSimilarityClass = (score: number) => {
+  if (score >= 0.70) return 'bg-red-100 text-red-600'
+  if (score >= 0.50) return 'bg-yellow-100 text-yellow-600'
+  return 'bg-green-100 text-green-600'
+}
+
+const getSimilarityIcon = (score: number) => {
+  if (score >= 0.70) return '⚠️'
+  if (score >= 0.50) return '⚡'
+  return '✅'
+}
+
+const getStatusClass = (status: string) => {
+  const classes: Record<string, string> = {
+    'pending': 'bg-yellow-100 text-yellow-800',
+    'approved': 'bg-green-100 text-green-800',
+    'rejected': 'bg-red-100 text-red-800',
+    'merged': 'bg-blue-100 text-blue-800'
+  }
+  return classes[status] || 'bg-gray-100 text-gray-800'
+}
+
+const getStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    'pending': 'En attente',
+    'approved': 'Approuvée',
+    'rejected': 'Rejetée',
+    'merged': 'Fusionnée'
+  }
+  return labels[status] || status
+}
+
+const getLanguageFlag = (code: string) => {
+  const flags: Record<string, string> = {
+    'fr': '🇫🇷', 'en': '🇬🇧', 'es': '🇪🇸', 'de': '🇩🇪', 'it': '🇮🇹'
+  }
+  return flags[code] || '🌐'
+}
+
+const formatRelativeTime = (datetime: string) => {
+  const date = new Date(datetime)
+  const now = new Date()
+  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+  
+  if (diffInMinutes < 1) return 'À l\'instant'
+  if (diffInMinutes < 60) return `Il y a ${diffInMinutes}min`
+  
+  const diffInHours = Math.floor(diffInMinutes / 60)
+  if (diffInHours < 24) return `Il y a ${diffInHours}h`
+  
+  const diffInDays = Math.floor(diffInHours / 24)
+  return `Il y a ${diffInDays}j`
+}
+
+const formatDate = (datetime: string) => {
+  return new Date(datetime).toLocaleDateString('fr-FR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+onMounted(() => {
+  loadSuggestions()
+})
 </script>
 
 <style scoped>

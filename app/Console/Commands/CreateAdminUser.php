@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class CreateAdminUser extends Command
 {
@@ -17,14 +19,14 @@ class CreateAdminUser extends Command
                             {name : Nom de l\'utilisateur}
                             {email : Email de l\'utilisateur}
                             {--password= : Mot de passe (généré automatiquement si non fourni)}
-                            {--role=admin : Rôle à assigner (user|moderator|admin|super_admin)}';
+                            {--admin : Donner le statut d\'administrateur complet}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Créer un utilisateur admin avec les permissions appropriées';
+    protected $description = 'Créer un utilisateur admin avec les permissions Spatie appropriées';
 
     /**
      * Execute the console command.
@@ -34,14 +36,7 @@ class CreateAdminUser extends Command
         $name = $this->argument('name');
         $email = $this->argument('email');
         $password = $this->option('password') ?: $this->generatePassword();
-        $role = $this->option('role');
-
-        // Valider le rôle
-        $validRoles = ['user', 'moderator', 'admin', 'super_admin'];
-        if (!in_array($role, $validRoles)) {
-            $this->error("Rôle invalide. Rôles disponibles : " . implode(', ', $validRoles));
-            return 1;
-        }
+        $isFullAdmin = $this->option('admin');
 
         // Vérifier si l'email existe déjà
         if (User::where('email', $email)->exists()) {
@@ -50,15 +45,32 @@ class CreateAdminUser extends Command
         }
 
         try {
+            // Créer les permissions si elles n'existent pas
+            $this->createPermissions();
+
             // Créer l'utilisateur
             $user = User::create([
                 'name' => $name,
                 'email' => $email,
                 'password' => Hash::make($password),
-                'role' => $role,
-                'is_active' => true,
                 'email_verified_at' => now(),
             ]);
+
+            // Assigner les permissions
+            if ($isFullAdmin) {
+                // Donner toutes les permissions admin
+                $user->givePermissionTo([
+                    'administrator',
+                    'manage categories', 
+                    'review suggestions', 
+                    'view analytics'
+                ]);
+                $permissionsText = 'Toutes les permissions administrateur';
+            } else {
+                // Permissions de base pour reviewer
+                $user->givePermissionTo(['review suggestions']);
+                $permissionsText = 'Reviewer de suggestions seulement';
+            }
 
             $this->newLine();
             $this->info('✅ Utilisateur créé avec succès !');
@@ -71,9 +83,9 @@ class CreateAdminUser extends Command
                     ['ID', $user->id],
                     ['Nom', $user->name],
                     ['Email', $user->email],
-                    ['Rôle', $user->role],
                     ['Mot de passe', $this->option('password') ? '[Fourni]' : $password],
-                    ['Permissions', implode(', ', $user->getAllPermissions())],
+                    ['Permissions', $permissionsText],
+                    ['Admin complet', $isFullAdmin ? 'Oui' : 'Non'],
                 ]
             );
 
@@ -86,30 +98,16 @@ class CreateAdminUser extends Command
             }
 
             $this->newLine();
-            $this->info('🎯 Accès disponibles selon le rôle :');
+            $this->info('🎯 Accès disponibles :');
             
-            switch ($role) {
-                case 'super_admin':
-                    $this->line("• Toutes les permissions");
-                    $this->line("• Gestion complète des utilisateurs");
-                    $this->line("• Gestion des catégories globales");
-                    $this->line("• Validation des suggestions");
-                    $this->line("• Analytics complètes");
-                    break;
-                    
-                case 'admin':
-                    $this->line("• Gestion des catégories globales");
-                    $this->line("• Validation des suggestions");
-                    $this->line("• Analytics");
-                    break;
-                    
-                case 'moderator':
-                    $this->line("• Validation des suggestions");
-                    break;
-                    
-                case 'user':
-                    $this->line("• Accès standard utilisateur");
-                    break;
+            if ($isFullAdmin) {
+                $this->line("• Administration complète des catégories");
+                $this->line("• Gestion des catégories globales");
+                $this->line("• Validation des suggestions");
+                $this->line("• Analytics complètes");
+            } else {
+                $this->line("• Validation des suggestions seulement");
+                $this->warn("💡 Utilisez --admin pour donner toutes les permissions");
             }
 
             $this->newLine();
@@ -121,6 +119,28 @@ class CreateAdminUser extends Command
             $this->error("Erreur lors de la création : {$e->getMessage()}");
             return 1;
         }
+    }
+
+    /**
+     * Créer les permissions nécessaires
+     */
+    private function createPermissions(): void
+    {
+        $permissions = [
+            'administrator' => 'Administrateur complet',
+            'manage categories' => 'Gérer les catégories',
+            'review suggestions' => 'Reviewer les suggestions',
+            'view analytics' => 'Voir les analytics'
+        ];
+
+        foreach ($permissions as $name => $description) {
+            Permission::firstOrCreate([
+                'name' => $name,
+                'guard_name' => 'web'
+            ]);
+        }
+
+        $this->info("✅ Permissions créées/vérifiées");
     }
 
     /**

@@ -5,7 +5,6 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use App\Models\User;
 
 class AdminPermissionMiddleware
 {
@@ -20,44 +19,39 @@ class AdminPermissionMiddleware
 
         // Vérifier si l'utilisateur est connecté
         if (!$user) {
-            return response()->json([
-                'error' => 'Non authentifié',
-                'message' => 'Vous devez être connecté pour accéder à cette ressource.'
-            ], 401);
-        }
-
-        // Vérifier si l'utilisateur est actif
-        if (!$user->is_active) {
-            return response()->json([
-                'error' => 'Compte désactivé',
-                'message' => 'Votre compte a été désactivé.'
-            ], 403);
-        }
-
-        // Mettre à jour la dernière activité
-        $user->updateLastActivity();
-
-        // Si aucune permission spécifique, vérifier juste si c'est un modérateur+
-        if (!$permission) {
-            if (!$user->isModerator()) {
+            if ($request->expectsJson()) {
                 return response()->json([
-                    'error' => 'Permissions insuffisantes',
-                    'message' => 'Vous n\'avez pas les permissions nécessaires.',
-                    'required_role' => 'moderator'
-                ], 403);
+                    'error' => 'Non authentifié',
+                    'message' => 'Vous devez être connecté pour accéder à cette ressource.'
+                ], 401);
+            }
+            return redirect()->route('login');
+        }
+
+        // Si aucune permission spécifique, vérifier juste si c'est un admin
+        if (!$permission) {
+            if (!$user->isAdmin()) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'error' => 'Permissions insuffisantes',
+                        'message' => 'Vous n\'avez pas les permissions administrateur nécessaires.'
+                    ], 403);
+                }
+                abort(403, 'Accès refusé');
             }
             return $next($request);
         }
 
         // Vérifier la permission spécifique
-        if (!$user->hasPermission($permission)) {
-            return response()->json([
-                'error' => 'Permission refusée',
-                'message' => "Vous n'avez pas la permission '{$permission}'.",
-                'user_role' => $user->role,
-                'user_permissions' => $user->getAllPermissions(),
-                'required_permission' => $permission
-            ], 403);
+        if (!$user->hasPermissionTo($permission) && !$user->isAdmin()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'error' => 'Permission refusée',
+                    'message' => "Vous n'avez pas la permission '{$permission}'.",
+                    'required_permission' => $permission
+                ], 403);
+            }
+            abort(403, 'Permission manquante: ' . $permission);
         }
 
         return $next($request);

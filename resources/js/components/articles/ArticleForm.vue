@@ -877,8 +877,8 @@ const availableLanguagesForSelection = computed(() => {
     const versionsLangs = Array.from(articleVersions.value.keys()).map((code) => {
         const siteLanguage = siteLanguages.value.find(l => l.code === code);
         return {
-            code,
-            name: getLanguageName(code),
+        code,
+        name: getLanguageName(code),
             flag: siteLanguage?.flag || getLanguageFlag(code),
         };
     });
@@ -1591,23 +1591,23 @@ const generateMultiLanguageArticle = async () => {
             }, 300); // Moins fréquent
 
             try {
-                const response = await axios.post('/articles/generate-with-ai', requestData, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                    },
-                });
+            const response = await axios.post('/articles/generate-with-ai', requestData, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+            });
 
                 // Arrêter l'animation de progression
                 clearInterval(progressInterval);
-                
-                const aiData = response.data;
-                console.log('✅ AI generation response for', targetLanguage, ':', aiData);
 
-                generationResults.value.push({
-                    language: targetLanguage,
-                    data: aiData,
-                });
+            const aiData = response.data;
+            console.log('✅ AI generation response for', targetLanguage, ':', aiData);
+
+            generationResults.value.push({
+                language: targetLanguage,
+                data: aiData,
+            });
                 
                 // Finaliser la progression pour cette langue
                 generationProgress.value = endProgress;
@@ -1692,7 +1692,7 @@ const loadGeneratedArticle = async (result: any) => {
             
             // Utiliser la fonction de conversion HTML vers EditorJS
             const editorJSData = convertHTMLToEditorJS(aiData.content_html);
-            version.content = JSON.stringify(editorJSData);
+                version.content = JSON.stringify(editorJSData);
             version.content_html = aiData.content_html; // Garder le HTML original aussi
             
             console.log('✅ HTML successfully converted to EditorJS for', language);
@@ -1700,17 +1700,17 @@ const loadGeneratedArticle = async (result: any) => {
             console.error('❌ Error converting HTML to EditorJS for', language, ':', error);
             // Fallback : créer un contenu EditorJS simple avec le HTML
             const fallbackContent = {
-                time: Date.now(),
-                blocks: [
-                    {
-                        type: 'paragraph',
-                        data: {
+                    time: Date.now(),
+                    blocks: [
+                        {
+                            type: 'paragraph',
+                            data: {
                             text: aiData.content_html || 'Contenu généré par IA',
+                            },
                         },
-                    },
-                ],
-                version: '2.28.2',
-            };
+                    ],
+                    version: '2.28.2',
+                };
             version.content = JSON.stringify(fallbackContent);
             version.content_html = aiData.content_html || '';
         }

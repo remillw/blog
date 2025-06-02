@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
+import NavAdmin from '@/components/NavAdmin.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useRoutes } from '@/composables/useRoutes';
@@ -64,6 +65,7 @@ const footerNavItems: NavItem[] = [
 
         <SidebarContent>
             <NavMain :items="mainNavItems" />
+            <NavAdmin />
         </SidebarContent>
 
         <SidebarFooter>

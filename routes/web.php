@@ -56,6 +56,61 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('ai.batch.results');
     Route::get('/ai/batches', [App\Http\Controllers\Api\AIController::class, 'getUserBatches'])
         ->name('ai.batches');
+        
+    // **Routes Admin**
+    Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class)->prefix('admin')->group(function () {
+        // Page principale d'administration des catégories
+        Route::get('/categories', function () {
+            return Inertia::render('Admin/CategoryDashboard');
+        })->name('admin.categories');
+        
+        // Gestion des utilisateurs (administrator permission)
+        Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class . ':administrator')->group(function () {
+            Route::get('/users', [\App\Http\Controllers\Admin\UserAdminController::class, 'index'])->name('admin.users');
+            Route::get('/users/create', [\App\Http\Controllers\Admin\UserAdminController::class, 'create'])->name('admin.users.create');
+            Route::post('/users', [\App\Http\Controllers\Admin\UserAdminController::class, 'store'])->name('admin.users.store');
+            Route::get('/users/{user}/edit', [\App\Http\Controllers\Admin\UserAdminController::class, 'edit'])->name('admin.users.edit');
+            Route::put('/users/{user}', [\App\Http\Controllers\Admin\UserAdminController::class, 'update'])->name('admin.users.update');
+            Route::delete('/users/{user}', [\App\Http\Controllers\Admin\UserAdminController::class, 'destroy'])->name('admin.users.destroy');
+            Route::post('/users/{user}/add-points', [\App\Http\Controllers\Admin\UserAdminController::class, 'addPoints'])->name('admin.users.add-points');
+            Route::post('/users/{user}/remove-points', [\App\Http\Controllers\Admin\UserAdminController::class, 'removePoints'])->name('admin.users.remove-points');
+            
+            // Configuration système
+            Route::get('/settings', [\App\Http\Controllers\Admin\SettingsAdminController::class, 'index'])->name('admin.settings');
+            Route::put('/settings', [\App\Http\Controllers\Admin\SettingsAdminController::class, 'update'])->name('admin.settings.update');
+        });
+        
+        // Analytics (view analytics permission)
+        Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class . ':view analytics')->group(function () {
+            Route::get('/analytics', [\App\Http\Controllers\Admin\AnalyticsAdminController::class, 'index'])->name('admin.analytics');
+        });
+    });
+    
+    // **Routes API Admin** (authentification web)
+    Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class)->prefix('api/admin')->group(function () {
+        // Dashboard principal (admin)
+        Route::get('/dashboard/categories', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'dashboard']);
+        
+        // Gestion des suggestions (review suggestions permission)
+        Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class . ':review suggestions')->group(function () {
+            Route::get('/suggestions', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'getSuggestions']);
+            Route::post('/suggestions/{suggestion}/approve', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'approveSuggestion']);
+            Route::post('/suggestions/{suggestion}/reject', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'rejectSuggestion']);
+            Route::post('/suggestions/{suggestion}/merge', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'mergeSuggestion']);
+        });
+        
+        // Gestion des catégories (manage categories permission)
+        Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class . ':manage categories')->group(function () {
+            Route::get('/categories', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'getCategories']);
+            Route::put('/categories/{category}', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'updateCategory']);
+            Route::delete('/categories/{category}', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'deleteCategory']);
+        });
+        
+        // Analytics (view analytics permission)
+        Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class . ':view analytics')->group(function () {
+            Route::get('/analytics/categories', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'getAnalytics']);
+        });
+    });
 });
 
 require __DIR__.'/settings.php';

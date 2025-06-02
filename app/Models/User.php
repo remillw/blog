@@ -24,6 +24,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'points',
     ];
 
     /**
@@ -78,5 +79,42 @@ class User extends Authenticatable
     public function memberTeams()
     {
         return $this->teams()->wherePivot('role', 'member');
+    }
+
+    /**
+     * Vérifier si l'utilisateur est administrateur
+     */
+    public function isAdmin(): bool
+    {
+        return $this->hasPermissionTo('administrator') || $this->hasRole('admin');
+    }
+
+    /**
+     * Vérifier si l'utilisateur peut gérer les catégories
+     */
+    public function canManageCategories(): bool
+    {
+        return $this->hasPermissionTo('manage categories') || $this->isAdmin();
+    }
+
+    /**
+     * Vérifier si l'utilisateur peut reviewer les suggestions
+     */
+    public function canReviewSuggestions(): bool
+    {
+        return $this->hasPermissionTo('review suggestions') || $this->isAdmin();
+    }
+
+    /**
+     * Vérifier si l'utilisateur peut voir les analytics
+     */
+    public function canViewAnalytics(): bool
+    {
+        return $this->hasPermissionTo('view analytics') || $this->isAdmin();
+    }
+
+    public function articles(): HasMany
+    {
+        return $this->hasMany(Article::class);
     }
 }

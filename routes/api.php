@@ -74,32 +74,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/site-categories', [\App\Http\Controllers\Api\GlobalCategoryController::class, 'getSiteCategories']);
         Route::get('/pending-suggestions', [\App\Http\Controllers\Api\GlobalCategoryController::class, 'getPendingSuggestions']);
     });
-
-    // **NOUVEAU: Routes admin pour la gestion des catégories** 
-    Route::middleware(['auth:sanctum', \App\Http\Middleware\AdminPermissionMiddleware::class])->prefix('admin')->group(function () {
-        // Dashboard principal (modérateur+)
-        Route::get('/dashboard/categories', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'dashboard']);
-        
-        // Gestion des suggestions (review_suggestions permission)
-        Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class . ':review_suggestions')->group(function () {
-            Route::get('/suggestions', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'getSuggestions']);
-            Route::post('/suggestions/{suggestion}/approve', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'approveSuggestion']);
-            Route::post('/suggestions/{suggestion}/reject', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'rejectSuggestion']);
-            Route::post('/suggestions/{suggestion}/merge', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'mergeSuggestion']);
-        });
-        
-        // Gestion des catégories (manage_categories permission)
-        Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class . ':manage_categories')->group(function () {
-            Route::get('/categories', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'getCategories']);
-            Route::put('/categories/{category}', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'updateCategory']);
-            Route::delete('/categories/{category}', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'deleteCategory']);
-        });
-        
-        // Analytics (view_analytics permission)
-        Route::middleware(\App\Http\Middleware\AdminPermissionMiddleware::class . ':view_analytics')->group(function () {
-            Route::get('/analytics/categories', [\App\Http\Controllers\Admin\CategoryAdminController::class, 'getAnalytics']);
-        });
-    });
 });
 
 // Route pour récupérer les articles d'un site via clé API

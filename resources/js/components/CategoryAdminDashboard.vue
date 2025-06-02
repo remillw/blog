@@ -25,7 +25,7 @@
               :disabled="loading"
               class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
-              <RefreshIcon class="w-4 h-4 mr-1" :class="{'animate-spin': loading}" />
+              <RotateCcw class="w-4 h-4 mr-1" :class="{'animate-spin': loading}" />
               Actualiser
             </button>
           </div>
@@ -60,13 +60,66 @@
     <!-- Contenu principal -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Vue Dashboard -->
-      <DashboardOverview 
-        v-if="activeTab === 'dashboard'"
-        :stats="stats"
-        :language-stats="languageStats"
-        :recent-activity="recentActivity"
-        :loading="loading"
-      />
+      <div v-if="activeTab === 'dashboard'" class="dashboard-overview">
+        <!-- Cartes de statistiques -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-2xl">
+                  🗂️
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <p class="text-sm font-medium text-gray-600">Total Catégories</p>
+                <p class="text-2xl font-semibold text-gray-900">{{ stats.total_categories || 0 }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <div class="w-12 h-12 rounded-lg bg-yellow-100 flex items-center justify-center text-2xl">
+                  💡
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <p class="text-sm font-medium text-gray-600">Suggestions en attente</p>
+                <p class="text-2xl font-semibold text-gray-900">{{ stats.pending_suggestions || 0 }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <div class="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center text-2xl">
+                  ⚠️
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <p class="text-sm font-medium text-gray-600">Forte similarité</p>
+                <p class="text-2xl font-semibold text-gray-900">{{ stats.high_similarity_suggestions || 0 }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center">
+              <div class="flex-shrink-0">
+                <div class="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center text-2xl">
+                  🌐
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <p class="text-sm font-medium text-gray-600">Sites liés</p>
+                <p class="text-2xl font-semibold text-gray-900">{{ stats.total_sites_linked || 0 }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Vue Suggestions -->
       <SuggestionsManager
@@ -76,203 +129,150 @@
       />
 
       <!-- Vue Catégories -->
-      <CategoriesManager
-        v-if="activeTab === 'categories'"
-        :user-permissions="userPermissions"
-        @category-updated="refreshDashboard"
-      />
+      <div v-if="activeTab === 'categories'" class="bg-white shadow rounded-lg">
+        <div class="p-6">
+          <div class="text-center py-12">
+            <div class="text-gray-400 text-6xl mb-4">🚧</div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Gestion des catégories</h3>
+            <p class="text-gray-600">
+              Interface en cours de développement. Utilisez l'API REST en attendant.
+            </p>
+          </div>
+        </div>
+      </div>
 
       <!-- Vue Analytics -->
-      <AnalyticsView
-        v-if="activeTab === 'analytics'"
-        :user-permissions="userPermissions"
-      />
+      <div v-if="activeTab === 'analytics'" class="bg-white shadow rounded-lg">
+        <div class="p-6">
+          <div class="text-center py-12">
+            <div class="text-gray-400 text-6xl mb-4">📊</div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Analytics des catégories</h3>
+            <p class="text-gray-600">
+              Données disponibles via <code class="bg-gray-100 px-2 py-1 rounded text-sm">/api/admin/analytics/categories</code>
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import DashboardOverview from './admin/DashboardOverview.vue'
+import { usePage } from '@inertiajs/vue3'
+import { RotateCcw } from 'lucide-vue-next'
 import SuggestionsManager from './admin/SuggestionsManager.vue'
-import CategoriesManager from './admin/CategoriesManager.vue'
-import AnalyticsView from './admin/AnalyticsView.vue'
-import RefreshIcon from '@heroicons/vue/outline/RefreshIcon'
 
-export default {
-  name: 'CategoryAdminDashboard',
-  components: {
-    DashboardOverview,
-    SuggestionsManager,
-    CategoriesManager,
-    AnalyticsView,
-    RefreshIcon
+const page = usePage()
+const loading = ref(false)
+const activeTab = ref('dashboard')
+
+const stats = reactive({
+  total_categories: 0,
+  root_categories: 0,
+  pending_suggestions: 0,
+  high_similarity_suggestions: 0,
+  categories_with_sites: 0,
+  total_sites_linked: 0,
+  most_used_categories: [],
+  recent_suggestions: []
+})
+
+const languageStats = ref([])
+const recentActivity = ref([])
+
+// Configuration des onglets
+const tabs = [
+  {
+    id: 'dashboard',
+    name: 'Tableau de bord',
+    icon: '📊',
+    permission: null
   },
-  setup() {
-    const authStore = useAuthStore()
-    const loading = ref(false)
-    const activeTab = ref('dashboard')
+  {
+    id: 'suggestions',
+    name: 'Suggestions',
+    icon: '💡',
+    badge: 'pending_suggestions',
+    permission: 'review suggestions'
+  },
+  {
+    id: 'categories',
+    name: 'Catégories',
+    icon: '🗂️',
+    permission: 'manage categories'
+  },
+  {
+    id: 'analytics',
+    name: 'Analytics',
+    icon: '📈',
+    permission: 'view analytics'
+  }
+]
+
+// Informations utilisateur depuis Inertia
+const user = computed(() => page.props.auth?.user)
+const userRole = computed(() => {
+  const userPerms = user.value?.permissions || []
+  return userPerms.includes('administrator') ? 'Administrateur' : 'Reviewer'
+})
+
+const userPermissions = computed(() => user.value?.permissions || [])
+
+// Vérifier les permissions
+const hasPermission = (permission: string | null) => {
+  if (!permission) return true
+  const userPerms = user.value?.permissions || []
+  return userPerms.includes(permission) || userPerms.includes('administrator')
+}
+
+// Charger les données du dashboard
+const loadDashboard = async () => {
+  loading.value = true
+  try {
+    const response = await fetch('/api/admin/dashboard/categories', {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error('Erreur lors du chargement')
+    }
+
+    const data = await response.json()
     
-    const stats = reactive({
-      total_categories: 0,
-      root_categories: 0,
-      pending_suggestions: 0,
-      high_similarity_suggestions: 0,
-      categories_with_sites: 0,
-      total_sites_linked: 0,
-      most_used_categories: [],
-      recent_suggestions: []
-    })
-    
-    const languageStats = ref([])
-    const recentActivity = ref([])
-
-    // Configuration des onglets
-    const tabs = [
-      {
-        id: 'dashboard',
-        name: 'Tableau de bord',
-        icon: '📊',
-        permission: null
-      },
-      {
-        id: 'suggestions',
-        name: 'Suggestions',
-        icon: '💡',
-        badge: 'pending_suggestions',
-        permission: 'review_suggestions'
-      },
-      {
-        id: 'categories',
-        name: 'Catégories',
-        icon: '🗂️',
-        permission: 'manage_categories'
-      },
-      {
-        id: 'analytics',
-        name: 'Analytics',
-        icon: '📈',
-        permission: 'view_analytics'
-      }
-    ]
-
-    // Informations utilisateur
-    const userRole = computed(() => {
-      const roleLabels = {
-        'super_admin': 'Super Administrateur',
-        'admin': 'Administrateur',
-        'moderator': 'Modérateur',
-        'user': 'Utilisateur'
-      }
-      return roleLabels[authStore.user?.role] || 'Utilisateur'
-    })
-
-    const userPermissions = computed(() => authStore.user?.permissions || [])
-
-    // Vérifier les permissions
-    const hasPermission = (permission) => {
-      if (!permission) return true
-      return authStore.user?.permissions?.includes(permission) || 
-             authStore.user?.role === 'super_admin' ||
-             (authStore.user?.role === 'admin' && ['manage_categories', 'review_suggestions', 'view_analytics'].includes(permission)) ||
-             (authStore.user?.role === 'moderator' && permission === 'review_suggestions')
+    if (data.success) {
+      Object.assign(stats, data.data.stats)
+      languageStats.value = data.data.language_stats
+      recentActivity.value = data.data.recent_activity
     }
-
-    // Charger les données du dashboard
-    const loadDashboard = async () => {
-      loading.value = true
-      try {
-        const response = await fetch('/api/admin/dashboard/categories', {
-          headers: {
-            'Authorization': `Bearer ${authStore.token}`,
-            'Content-Type': 'application/json'
-          }
-        })
-
-        if (!response.ok) {
-          throw new Error('Erreur lors du chargement')
-        }
-
-        const data = await response.json()
-        
-        if (data.success) {
-          Object.assign(stats, data.data.stats)
-          languageStats.value = data.data.language_stats
-          recentActivity.value = data.data.recent_activity
-        }
-      } catch (error) {
-        console.error('Erreur dashboard:', error)
-        // TODO: Afficher notification d'erreur
-      } finally {
-        loading.value = false
-      }
-    }
-
-    const refreshDashboard = () => {
-      loadDashboard()
-    }
-
-    onMounted(() => {
-      // Vérifier les permissions avant de charger
-      if (!hasPermission(null)) {
-        // Rediriger vers une page d'erreur ou afficher un message
-        console.error('Permissions insuffisantes')
-        return
-      }
-      
-      loadDashboard()
-    })
-
-    return {
-      loading,
-      activeTab,
-      stats,
-      languageStats,
-      recentActivity,
-      tabs,
-      userRole,
-      userPermissions,
-      hasPermission,
-      refreshDashboard
-    }
+  } catch (error) {
+    console.error('Erreur dashboard:', error)
+  } finally {
+    loading.value = false
   }
 }
+
+const refreshDashboard = () => {
+  loadDashboard()
+}
+
+onMounted(() => {
+  if (!hasPermission(null)) {
+    console.error('Permissions insuffisantes')
+    return
+  }
+  
+  loadDashboard()
+})
 </script>
 
 <style scoped>
 .category-admin-dashboard {
   min-height: 100vh;
   background-color: #f9fafb;
-}
-
-/* Animations pour les transitions */
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-}
-
-/* Styles pour les badges */
-.badge {
-  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
-}
-
-.badge-red {
-  @apply bg-red-100 text-red-800;
-}
-
-.badge-yellow {
-  @apply bg-yellow-100 text-yellow-800;
-}
-
-.badge-green {
-  @apply bg-green-100 text-green-800;
-}
-
-.badge-blue {
-  @apply bg-blue-100 text-blue-800;
 }
 </style> 
