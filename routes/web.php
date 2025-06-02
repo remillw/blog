@@ -37,6 +37,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'categories' => $site ? $site->categories()->get(['categories.id', 'categories.name']) : []
         ]);
     })->name('debug.categories');
+    Route::get('/sites/{site}/colors', [SiteController::class, 'getColors'])->name('sites.colors');
+    Route::get('/sites/{site}/categories', [SiteController::class, 'getCategories'])->name('sites.categories');
+    Route::get('/sites/{site}/languages', [SiteController::class, 'getLanguages'])->name('sites.languages');
+    
+    // Routes pour l'IA et la traduction
+    Route::post('/articles/generate-with-ai', [App\Http\Controllers\Api\AIController::class, 'generateArticle'])
+        ->name('articles.generate-ai');
+    Route::post('/articles/translate', [App\Http\Controllers\Api\AIController::class, 'translateArticle'])
+        ->name('articles.translate');
 });
 
 require __DIR__.'/settings.php';

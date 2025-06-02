@@ -216,4 +216,104 @@ class SiteController extends Controller
             'accent_color' => $site->accent_color,
         ]);
     }
+
+    public function getColors(Site $site)
+    {
+        if (Auth::id() !== $site->user_id) {
+            abort(403);
+        }
+            
+        return response()->json([
+            'primary_color' => $site->primary_color,
+            'secondary_color' => $site->secondary_color,
+            'accent_color' => $site->accent_color,
+        ]);
+    }
+
+    public function getCategories(Site $site)
+    {
+        if (Auth::id() !== $site->user_id) {
+            abort(403);
+        }
+
+        $categories = $site->categories()->get();
+        
+        return response()->json($categories);
+    }
+
+    public function getLanguages(Site $site)
+    {
+        if (Auth::id() !== $site->user_id) {
+            abort(403);
+        }
+
+        $languages = $site->languages()->get()->map(function ($language) {
+            $aiLanguageCode = $this->mapToAILanguageCode($language->slug);
+            
+            return [
+                'id' => $language->id,
+                'code' => $aiLanguageCode,
+                'name' => $language->name,
+                'flag' => $language->flag_url ?: $this->getLanguageFlag($aiLanguageCode),
+            ];
+        });
+        
+        return response()->json($languages);
+    }
+
+    private function mapToAILanguageCode(string $slug): string
+    {
+        $mapping = [
+            'francais' => 'fr',
+            'french' => 'fr',
+            'fr' => 'fr',
+            'english' => 'en',
+            'anglais' => 'en',
+            'en' => 'en',
+            'spanish' => 'es',
+            'espagnol' => 'es',
+            'es' => 'es',
+            'german' => 'de',
+            'allemand' => 'de',
+            'de' => 'de',
+            'italian' => 'it',
+            'italien' => 'it',
+            'it' => 'it',
+            'portuguese' => 'pt',
+            'portugais' => 'pt',
+            'pt' => 'pt',
+            'dutch' => 'nl',
+            'neerlandais' => 'nl',
+            'nl' => 'nl',
+            'russian' => 'ru',
+            'russe' => 'ru',
+            'ru' => 'ru',
+            'japanese' => 'ja',
+            'japonais' => 'ja',
+            'ja' => 'ja',
+            'chinese' => 'zh',
+            'chinois' => 'zh',
+            'zh' => 'zh',
+        ];
+
+        return $mapping[strtolower($slug)] ?? 'fr';
+    }
+
+    private function getLanguageFlag(string $code): string
+    {
+        $flags = [
+            'fr' => '🇫🇷',
+            'en' => '🇬🇧',
+            'es' => '🇪🇸',
+            'de' => '🇩🇪',
+            'it' => '🇮🇹',
+            'pt' => '🇵🇹',
+            'nl' => '🇳🇱',
+            'ru' => '🇷🇺',
+            'ja' => '🇯🇵',
+            'zh' => '🇨🇳',
+        ];
+
+        return $flags[$code] ?? '🌐';
+    }
 }
