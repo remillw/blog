@@ -4,7 +4,7 @@
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="p-6">
             <div class="mb-6 flex items-center justify-between">
-                <h2 class="text-xl leading-tight font-semibold text-gray-800">Articles</h2>
+                <h2 class="text-xl leading-tight font-semibold text-gray-800">Articdaddales</h2>
                 <Button as-child variant="outline">
                     <Link :href="articleRoutes.create()">
                         <PlusIcon class="mr-2 h-4 w-4" />
@@ -74,34 +74,44 @@
                             {{ article.published_at ? formatDate(article.published_at) : '-' }}
                         </TableCell>
                         <TableCell>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" class="h-8 w-8 p-0">
-                                        <MoreHorizontal class="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem>
-                                        <Link :href="articleRoutes.edit(article.id)" class="flex items-center">
+                            <div class="flex items-center gap-2">
+                                <!-- Bouton d'édition simple pour test -->
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    @click="editArticle(article)"
+                                    class="text-xs"
+                                >
+                                    ✏️ Edit
+                                </Button>
+                                
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" class="h-8 w-8 p-0">
+                                            <MoreHorizontal class="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem @click="editArticle(article)">
                                             <PencilIcon class="mr-2 h-4 w-4" />
-                                            Edit
-                                        </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem v-if="article.status === 'draft'" @click="publishArticle(article)">
-                                        <CheckIcon class="mr-2 h-4 w-4" />
-                                        Publish
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem v-if="article.status === 'published'" @click="unpublishArticle(article)">
-                                        <XIcon class="mr-2 h-4 w-4" />
-                                        Unpublish
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem class="text-red-600" @click="deleteArticle(article)">
-                                        <TrashIcon class="mr-2 h-4 w-4" />
-                                        Delete
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                                            Edittttt
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem v-if="article.status === 'draft'" @click="publishArticle(article)">
+                                            <CheckIcon class="mr-2 h-4 w-4" />
+                                            Publish
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem v-if="article.status === 'published'" @click="unpublishArticle(article)">
+                                            <XIcon class="mr-2 h-4 w-4" />
+                                            Unpublish
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem class="text-red-600" @click="deleteArticle(article)">
+                                            <TrashIcon class="mr-2 h-4 w-4" />
+                                            Delete
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
                         </TableCell>
                     </TableRow>
                 </TableBody>
@@ -214,5 +224,27 @@ const deleteArticle = (article: Article) => {
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString();
+};
+
+const editArticle = (article: Article) => {
+    console.log('🚀 Navigating to edit page for article:', article.id);
+    const editUrl = articleRoutes.edit(article.id);
+    console.log('📍 Edit URL:', editUrl);
+    
+    // Méthode 1: Utiliser router.visit (Inertia)
+    router.visit(editUrl, {
+        onError: (errors) => {
+            console.error('❌ Navigation errors:', errors);
+            // Fallback: utiliser window.location
+            console.log('🔄 Falling back to window.location');
+            window.location.href = editUrl;
+        },
+        onSuccess: () => {
+            console.log('✅ Navigation successful');
+        },
+        onStart: () => {
+            console.log('🔄 Navigation started');
+        }
+    });
 };
 </script>

@@ -1,11 +1,3 @@
-import '../css/app.css';
-
-import { createInertiaApp } from '@inertiajs/vue3';
-import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
-import type { DefineComponent } from 'vue';
-import { createApp, h } from 'vue';
-import { ZiggyVue } from 'ziggy-js';
-import { initializeTheme } from './composables/useAppearance';
 import axios from 'axios';
 
 // Configuration globale d'Axios pour inclure le token CSRF
@@ -34,7 +26,6 @@ const getCSRFToken = (): string => {
 // Configuration des en-têtes par défaut d'Axios
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 axios.defaults.headers.common['Accept'] = 'application/json';
-axios.defaults.headers.common['Content-Type'] = 'application/json';
 
 // Intercepteur pour ajouter le token CSRF à chaque requête
 axios.interceptors.request.use(
@@ -42,10 +33,14 @@ axios.interceptors.request.use(
         const token = getCSRFToken();
         if (token) {
             config.headers['X-CSRF-TOKEN'] = token;
+            console.log('🔑 CSRF token added to request:', token.substring(0, 10) + '...');
+        } else {
+            console.warn('⚠️ No CSRF token found for request');
         }
         return config;
     },
     (error) => {
+        console.error('❌ Request interceptor error:', error);
         return Promise.reject(error);
     }
 );
@@ -56,40 +51,13 @@ axios.interceptors.response.use(
     (error) => {
         if (error.response?.status === 419) {
             console.error('❌ CSRF token mismatch. Please refresh the page.');
-            // Optionnel: rediriger vers la page de connexion ou afficher un message
+            // Vous pouvez ici afficher une notification à l'utilisateur
+            if (typeof window !== 'undefined') {
+                alert('Erreur de sécurité (CSRF). Veuillez rafraîchir la page et réessayer.');
+            }
         }
         return Promise.reject(error);
     }
 );
 
-// Extend ImportMeta interface for Vite...
-declare module 'vite/client' {
-    interface ImportMetaEnv {
-        readonly VITE_APP_NAME: string;
-        [key: string]: string | boolean | undefined;
-    }
-
-    interface ImportMeta {
-        readonly env: ImportMetaEnv;
-        readonly glob: <T>(pattern: string) => Record<string, () => Promise<T>>;
-    }
-}
-
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
-
-createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
-    resolve: (name) => resolvePageComponent(`./pages/${name}.vue`, import.meta.glob<DefineComponent>('./pages/**/*.vue')),
-    setup({ el, App, props, plugin }) {
-        createApp({ render: () => h(App, props) })
-            .use(plugin)
-            .use(ZiggyVue)
-            .mount(el);
-    },
-    progress: {
-        color: '#4B5563',
-    },
-});
-
-// This will set light / dark mode on page load...
-initializeTheme();
+export default axios; 

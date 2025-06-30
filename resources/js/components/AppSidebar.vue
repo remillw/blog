@@ -7,7 +7,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { useRoutes } from '@/composables/useRoutes';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, FileText, Folder, Globe, LayoutGrid, Tags } from 'lucide-vue-next';
+import { BookOpen, FileText, Folder, Globe, LayoutGrid, Tags, Calendar } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const { appRoutes, articleRoutes, categoryRoutes, siteRoutes } = useRoutes();
@@ -32,6 +32,11 @@ const mainNavItems: NavItem[] = [
         title: 'Categories',
         href: categoryRoutes.index(),
         icon: Tags,
+    },
+    {
+        title: 'Topics',
+        href: '/topics',
+        icon: Calendar,
     },
 ];
 

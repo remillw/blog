@@ -149,4 +149,115 @@ class ArticleApiController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Récupère les articles d'un site spécifique pour le formulaire d'article
+     */
+    public function getSiteArticles(Request $request, Site $site)
+    {
+        // Vérifier que l'utilisateur a accès au site
+        if ($request->user()->id !== $site->user_id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $query = Article::where('site_id', $site->id)
+            ->orderBy('updated_at', 'desc');
+
+        // Filtre par langue si spécifié
+        if ($request->has('language') && $request->language) {
+            $query->where('language_code', $request->language);
+        }
+
+        // Filtre par statut si spécifié
+        if ($request->has('status') && $request->status) {
+            $query->where('status', $request->status);
+        }
+
+        // Recherche textuelle
+        if ($request->has('search') && $request->search) {
+            $query->where(function ($q) use ($request) {
+                $q->where('title', 'like', "%{$request->search}%")
+                  ->orWhere('excerpt', 'like', "%{$request->search}%");
+            });
+        }
+
+        $perPage = min($request->get('per_page', 20), 50); // Max 50 pour l'interface
+        $articles = $query->paginate($perPage);
+
+        return response()->json([
+            'articles' => $articles->items(),
+            'pagination' => [
+                'current_page' => $articles->currentPage(),
+                'last_page' => $articles->lastPage(),
+                'per_page' => $articles->perPage(),
+                'total' => $articles->total(),
+                'has_more_pages' => $articles->hasMorePages(),
+            ]
+        ]);
+    }
+
+    /**
+     * Récupère les détails complets d'un article pour édition
+     */
+    public function getFullArticle(Request $request, Article $article)
+    {
+        // Vérifier que l'utilisateur a accès à l'article
+        $site = $article->site;
+        if ($request->user()->id !== $site->user_id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Charger l'article avec toutes ses relations
+        $article->load(['categories:id,name,slug', 'tags:id,name', 'site:id,name']);
+
+        return response()->json([
+            'article' => [
+                'id' => $article->id,
+                'site_id' => $article->site_id,
+                'language_code' => $article->language_code,
+                'title' => $article->title,
+                'slug' => $article->slug,
+                'content' => $article->content, // Version markdown/brute
+                'content_html' => $article->content_html,
+                'excerpt' => $article->excerpt,
+                'cover_image' => $article->cover_image,
+                'meta_title' => $article->meta_title,
+                'meta_description' => $article->meta_description,
+                'meta_keywords' => $article->meta_keywords,
+                'canonical_url' => $article->canonical_url,
+                'status' => $article->status,
+                'published_at' => $article->published_at,
+                'scheduled_at' => $article->scheduled_at,
+                'is_featured' => $article->is_featured,
+                'reading_time' => $article->reading_time,
+                'word_count' => $article->word_count,
+                'author_name' => $article->author_name,
+                'author_bio' => $article->author_bio,
+                'og_title' => $article->og_title,
+                'og_description' => $article->og_description,
+                'og_image' => $article->og_image,
+                'twitter_title' => $article->twitter_title,
+                'twitter_description' => $article->twitter_description,
+                'twitter_image' => $article->twitter_image,
+                'schema_markup' => $article->schema_markup,
+                'source' => $article->source,
+                'external_id' => $article->external_id,
+                'created_at' => $article->created_at,
+                'updated_at' => $article->updated_at,
+                'categories' => $article->categories->map(fn($cat) => [
+                    'id' => $cat->id,
+                    'name' => $cat->name,
+                    'slug' => $cat->slug,
+                ]),
+                'tags' => $article->tags->map(fn($tag) => [
+                    'id' => $tag->id,
+                    'name' => $tag->name,
+                ]),
+                'site' => [
+                    'id' => $site->id,
+                    'name' => $site->name,
+                ]
+            ]
+        ]);
+    }
 } 

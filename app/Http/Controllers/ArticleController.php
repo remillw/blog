@@ -148,25 +148,46 @@ class ArticleController extends Controller
 
     public function edit(Article $article)
     {
-        $article->load(['categories', 'tags']);
+        $article->load(['categories', 'tags', 'site.languages']);
 
-        // Récupérer les catégories via la relation many-to-many avec les sites de l'utilisateur
-        $userSiteIds = Site::where('user_id', Auth::id())->pluck('id');
-        $categories = Category::whereHas('sites', function ($query) use ($userSiteIds) {
-            $query->whereIn('sites.id', $userSiteIds);
+        // Récupérer toutes les catégories disponibles pour ce site avec leurs langues
+        $categories = Category::whereHas('sites', function ($query) use ($article) {
+            $query->where('sites.id', $article->site_id);
         })->orderBy('name')->get();
 
-        // Récupérer les tags des sites de l'utilisateur
-        $tags = Tag::whereIn('site_id', $userSiteIds)
+        // Récupérer les tags du site de l'article
+        $tags = Tag::where('site_id', $article->site_id)
             ->orderBy('name')
             ->get();
 
+        // Récupérer tous les sites de l'utilisateur
         $sites = Site::where('user_id', Auth::id())
+            ->with(['languages'])
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        // Préparer les données de l'article pour EditorJS
+        $articleData = $article->toArray();
+        
+        // Si le content est du JSON EditorJS, le parser pour l'édition
+        if (!empty($article->content)) {
+            $decodedContent = json_decode($article->content, true);
+            if (json_last_error() === JSON_ERROR_NONE && isset($decodedContent['blocks'])) {
+                // C'est du contenu EditorJS
+                $articleData['editorjs_content'] = $decodedContent;
+                $articleData['content_type'] = 'editorjs';
+            } else {
+                // C'est du contenu texte/HTML classique
+                $articleData['content_type'] = 'html';
+            }
+        }
+
+        // Ajouter les IDs des catégories et tags pour le formulaire
+        $articleData['category_ids'] = $article->categories->pluck('id')->toArray();
+        $articleData['tag_ids'] = $article->tags->pluck('id')->toArray();
+
         return Inertia::render('Articles/Edit', [
-            'article' => $article,
+            'article' => $articleData,
             'categories' => $categories,
             'tags' => $tags,
             'sites' => $sites,
@@ -179,11 +200,13 @@ class ArticleController extends Controller
             'title' => 'required|string|max:255',
             'content' => 'required|string',
             'content_html' => 'nullable|string', 
+            'content_type' => 'nullable|string|in:html,editorjs',
+            'editorjs_content' => 'nullable|array',
             'excerpt' => 'nullable|string',
-            'cover_image' => 'nullable|image|max:2048', // Image de couverture uploadée
+            'cover_image' => 'nullable|image|max:2048',
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string',
-            'meta_keywords' => 'nullable|string',
+            'meta_keywords' => 'nullable|array',
             'canonical_url' => 'nullable|url',
             'status' => 'required|in:draft,published,scheduled',
             'published_at' => 'nullable|date',
@@ -195,6 +218,13 @@ class ArticleController extends Controller
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
             'site_id' => 'required|exists:sites,id',
+            'language_code' => 'nullable|string|max:10',
+            'og_title' => 'nullable|string|max:255',
+            'og_description' => 'nullable|string',
+            'og_image' => 'nullable|string',
+            'twitter_title' => 'nullable|string|max:255',
+            'twitter_description' => 'nullable|string',
+            'twitter_image' => 'nullable|string',
         ]);
 
         // Vérifier que le site appartient à l'utilisateur connecté
@@ -202,56 +232,86 @@ class ArticleController extends Controller
             ->where('user_id', Auth::id())
             ->firstOrFail();
 
-        // Mettre à jour le slug si le titre a changé
-        $newSlug = $article->slug;
-        if ($article->title !== $validated['title']) {
-            $slug = Str::slug($validated['title']);
-            $originalSlug = $slug;
-            $counter = 1;
-            while (Article::where('slug', $slug)->where('id', '!=', $article->id)->exists()) {
-                $slug = $originalSlug . '-' . $counter;
-                $counter++;
+        // Gérer le contenu selon le type
+        $contentData = [];
+        if ($validated['content_type'] === 'editorjs' && !empty($validated['editorjs_content'])) {
+            // Stocker le contenu EditorJS en JSON
+            $contentData['content'] = json_encode($validated['editorjs_content']);
+            // Générer le HTML à partir du contenu EditorJS si besoin
+            if (!empty($validated['content_html'])) {
+                $contentData['content_html'] = $validated['content_html'];
             }
-            $validated['slug'] = $slug;
-            $newSlug = $slug;
+        } else {
+            // Contenu HTML classique
+            $contentData['content'] = $validated['content'];
+            $contentData['content_html'] = $validated['content_html'] ?? $validated['content'];
         }
 
-        // Marquer comme non synchronisé si le contenu a changé
-        if ($article->content !== $validated['content'] || $article->content_html !== $validated['content_html']) {
-            $validated['is_synced'] = false;
+        // Générer un nouveau slug si le titre a changé
+        $slug = $article->slug;
+        if ($article->title !== $validated['title']) {
+            $newSlug = Str::slug($validated['title']);
+            $originalSlug = $newSlug;
+            $counter = 1;
+            while (Article::where('slug', $newSlug)->where('id', '!=', $article->id)->exists()) {
+                $newSlug = $originalSlug . '-' . $counter;
+                $counter++;
+            }
+            $slug = $newSlug;
         }
 
         // Gérer l'upload de l'image de couverture
-        $updateData = $validated;
         if ($request->hasFile('cover_image')) {
-            // Supprimer l'ancienne image si elle existe (extraire le chemin de l'URL)
+            // Supprimer l'ancienne image si elle existe
             if ($article->cover_image) {
-                $oldPath = str_replace(asset('storage/'), '', $article->cover_image);
-                $this->deleteCoverImage($oldPath);
+                $this->deleteCoverImage($article->cover_image);
             }
             
-            // Stocker la nouvelle image avec le slug (potentiellement mis à jour)
-            $coverImagePath = $this->storeCoverImage($request->file('cover_image'), $newSlug);
-            $updateData['cover_image'] = asset('storage/' . $coverImagePath);
+            $coverImagePath = $this->storeCoverImage($request->file('cover_image'), $slug);
+            $validated['cover_image'] = asset('storage/' . $coverImagePath);
+        } else {
+            // Garder l'image existante
+            unset($validated['cover_image']);
         }
+
+        // Calculer le word count
+        $wordCount = 0;
+        if (!empty($contentData['content_html'])) {
+            $wordCount = str_word_count(strip_tags($contentData['content_html']));
+        } elseif (!empty($contentData['content'])) {
+            $wordCount = str_word_count(strip_tags($contentData['content']));
+        }
+
+        // Mettre à jour l'article
+        $updateData = array_merge($validated, $contentData, [
+            'slug' => $slug,
+            'word_count' => $wordCount,
+            'reading_time' => ceil($wordCount / 200),
+            'is_synced' => false, // Marquer comme non synchronisé pour mise à jour
+        ]);
+
+        // Supprimer les champs qui ne sont pas dans la table
+        unset($updateData['categories'], $updateData['tags'], $updateData['content_type'], $updateData['editorjs_content']);
 
         $article->update($updateData);
 
+        // Synchroniser les catégories
         if (isset($validated['categories'])) {
             $article->categories()->sync($validated['categories']);
         }
 
+        // Synchroniser les tags
         if (isset($validated['tags'])) {
             $article->tags()->sync($validated['tags']);
         }
 
-        // Envoyer le webhook si l'article est publié et a été modifié
-        if ($validated['status'] === 'published' && !$article->is_synced) {
+        // Envoyer le webhook si l'article est publié
+        if ($validated['status'] === 'published') {
             $this->sendWebhook($article);
         }
 
         return redirect()->route('articles.index')
-            ->with('success', 'Article updated successfully.');
+            ->with('success', 'Article mis à jour avec succès.');
     }
 
     public function destroy(Article $article)

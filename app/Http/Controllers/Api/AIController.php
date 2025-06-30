@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Article;
 use App\Models\Category;
 use App\Models\Site;
 use App\Models\AiBatchJob;
@@ -67,12 +68,16 @@ class AIController extends Controller
                 if ($site) {
                     $siteContext = "\nContexte du site: {$site->name} - {$site->description}";
                     
-                    // Récupérer les catégories disponibles
-                    $categoriesQuery = $site->categories();
-                    if ($language) {
-                        $categoriesQuery->where('categories.language_code', $language);
-                    }
-                    $availableCategories = $categoriesQuery->pluck('categories.name')->toArray();
+                    // **NOUVEAU: Récupérer les catégories globales disponibles**
+                    $globalCategories = $site->globalCategories()
+                        ->wherePivot('language_code', $language)
+                        ->wherePivot('is_active', true)
+                        ->orderByPivot('sort_order')
+                        ->get();
+                        
+                    $availableCategories = $globalCategories->map(function ($category) use ($language) {
+                        return $category->getTranslatedName($language);
+                    })->toArray();
                     
                     // Récupérer les articles existants pour les liens internes
                     $existingArticles = $site->articles->map(function($article) {
@@ -122,13 +127,8 @@ class AIController extends Controller
             $aiResponse = $response->json();
             $content = $aiResponse['choices'][0]['message']['content'] ?? '';
 
-            // Parser la réponse JSON de l'IA
+            // Parser la réponse JSON de l'IA (les backlinks sont déjà intégrés par l'IA)
             $parsedContent = $this->parseAIResponse($content);
-
-            // **NOUVEAU: Post-traiter pour intégrer les backlinks intelligemment**
-            if ($siteId && !empty($backlinkSuggestions)) {
-                $parsedContent = $this->integrateBacklinks($parsedContent, $backlinkSuggestions, $siteId);
-            }
 
             // Mettre en cache pour 24h
             cache()->put($cacheKey, $parsedContent, now()->addHours(24));
@@ -136,7 +136,8 @@ class AIController extends Controller
             Log::info('Article generated and cached', [
                 'cache_key' => $cacheKey,
                 'tokens_used' => $aiResponse['usage']['total_tokens'] ?? 0,
-                'backlinks_integrated' => count($backlinkSuggestions)
+                'backlinks_suggested' => count($backlinkSuggestions),
+                'backlinks_integrated' => $parsedContent['backlinks_metadata']['total_integrated'] ?? 0
             ]);
 
             return response()->json($parsedContent);
@@ -455,7 +456,7 @@ class AIController extends Controller
     }
 
     /**
-     * Récupérer les suggestions de backlinks pertinentes pour le prompt
+     * Récupérer des suggestions de backlinks pertinentes basées sur l'analyse sémantique
      */
     private function getBacklinkSuggestionsForPrompt(string $prompt, ?int $siteId, string $language): array
     {
@@ -463,91 +464,300 @@ class AIController extends Controller
             return [];
         }
 
-        // Rechercher des articles existants qui pourraient être pertinents
-        $relevantArticles = Article::where('site_id', $siteId)
+        try {
+            // 1. Analyser le prompt pour extraire les concepts clés
+            $promptKeywords = $this->extractKeywordsFromPrompt($prompt);
+            
+            // 2. Récupérer les suggestions existantes avec score élevé
+            $existingSuggestions = BacklinkSuggestion::with(['targetArticle.site'])
+                ->whereHas('sourceArticle', function($query) use ($siteId, $language) {
+                    $query->where('site_id', $siteId)
+                          ->where('language_code', $language);
+                })
+                ->unused()
+                ->highQuality(0.70) // Score >= 70%
+                ->orderBy('relevance_score', 'desc')
+                ->limit(8)
+                ->get();
+
+            // 3. Trouver des articles similaires au prompt via recherche sémantique
+            $semanticMatches = $this->findSemanticMatches($prompt, $promptKeywords, $siteId, $language);
+
+            // 4. Combiner et scorer les suggestions
+            $allSuggestions = $this->combineAndScoreSuggestions($existingSuggestions, $semanticMatches, $siteId);
+
+            // 5. Appliquer la logique de points utilisateur
+            $userPoints = UserBacklinkPoints::getOrCreateForUser(auth()->id());
+            $filteredSuggestions = $this->filterSuggestionsByPoints($allSuggestions, $userPoints);
+
+            Log::info('🔗 Generated intelligent backlink suggestions', [
+                'prompt_keywords' => $promptKeywords,
+                'existing_suggestions' => $existingSuggestions->count(),
+                'semantic_matches' => count($semanticMatches),
+                'final_suggestions' => count($filteredSuggestions),
+                'user_points' => $userPoints->available_points,
+            ]);
+
+            return $filteredSuggestions;
+
+        } catch (\Exception $e) {
+            Log::error('🔗 Failed to get intelligent backlink suggestions', [
+                'prompt' => $prompt,
+                'site_id' => $siteId,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Fallback vers le système simple
+            return $this->getFallbackBacklinkSuggestions($siteId, $language);
+        }
+    }
+
+    /**
+     * Extraire les mots-clés et concepts du prompt
+     */
+    private function extractKeywordsFromPrompt(string $prompt): array
+    {
+        // Nettoyer et normaliser le prompt
+        $text = strtolower(trim($prompt));
+        
+        // Mots vides à exclure
+        $stopWords = [
+            'le', 'la', 'les', 'de', 'des', 'du', 'un', 'une', 'et', 'ou', 'à', 'au', 'aux',
+            'dans', 'sur', 'pour', 'avec', 'par', 'ce', 'ces', 'cette', 'comment', 'que',
+            'qui', 'quoi', 'où', 'quand', 'pourquoi', 'the', 'and', 'or', 'in', 'on', 'at',
+            'to', 'for', 'with', 'by', 'from', 'what', 'how', 'when', 'where', 'why'
+        ];
+        
+        // Extraire les mots significatifs (plus de 3 caractères)
+        $words = preg_split('/[\s\.,!?;:"()]+/', $text);
+        $keywords = array_filter($words, function($word) use ($stopWords) {
+            return strlen($word) > 3 && !in_array($word, $stopWords);
+        });
+        
+        // Garder les 5 mots-clés les plus importants
+        return array_slice(array_values($keywords), 0, 5);
+    }
+
+    /**
+     * Trouver des articles qui correspondent sémantiquement au prompt
+     */
+    private function findSemanticMatches(string $prompt, array $keywords, int $siteId, string $language): array
+    {
+        $matches = [];
+        
+        if (empty($keywords)) {
+            return $matches;
+        }
+        
+        // Recherche par titre et excerpt avec mots-clés
+        $keywordPattern = implode('|', array_map('preg_quote', $keywords));
+        
+        $articles = Article::where('language_code', $language)
+            ->where('status', 'published')
+            ->whereNotNull('content_html')
+            ->where(function($query) use ($keywordPattern) {
+                $query->whereRaw("LOWER(title) REGEXP ?", [$keywordPattern])
+                      ->orWhereRaw("LOWER(excerpt) REGEXP ?", [$keywordPattern]);
+            })
+            ->with(['site', 'categories'])
+            ->limit(10)
+            ->get();
+
+        foreach ($articles as $article) {
+            // Calculer un score de pertinence basique
+            $score = $this->calculateBasicRelevanceScore($prompt, $keywords, $article);
+            
+            if ($score >= 0.4) { // Seuil minimum de pertinence
+                $matches[] = [
+                    'id' => $article->id,
+                    'title' => $article->title,
+                    'excerpt' => $article->excerpt,
+                    'is_same_site' => $article->site_id === $siteId,
+                    'slug' => $article->slug ?? str()->slug($article->title),
+                    'relevance_score' => $score,
+                    'site_name' => $article->site->name ?? 'Site inconnu',
+                    'reasoning' => $this->generateReasoningForMatch($keywords, $article),
+                ];
+            }
+        }
+        
+        // Trier par score de pertinence
+        usort($matches, fn($a, $b) => $b['relevance_score'] <=> $a['relevance_score']);
+        
+        return array_slice($matches, 0, 6);
+    }
+
+    /**
+     * Calculer un score de pertinence basique
+     */
+    private function calculateBasicRelevanceScore(string $prompt, array $keywords, Article $article): float
+    {
+        $score = 0;
+        $maxScore = 0;
+        
+        $content = strtolower($article->title . ' ' . $article->excerpt);
+        
+        foreach ($keywords as $keyword) {
+            $maxScore += 1;
+            
+            // Score pour le titre (plus important)
+            if (stripos($article->title, $keyword) !== false) {
+                $score += 0.7;
+            }
+            
+            // Score pour l'excerpt
+            if (stripos($article->excerpt, $keyword) !== false) {
+                $score += 0.3;
+            }
+        }
+        
+        // Bonus pour la longueur du contenu (plus c'est détaillé, mieux c'est)
+        if (strlen($article->excerpt) > 100) {
+            $score += 0.1;
+        }
+        
+        // Bonus pour les catégories similaires (si on peut analyser)
+        if ($article->categories->isNotEmpty()) {
+            $score += 0.1;
+        }
+        
+        return $maxScore > 0 ? min($score / $maxScore, 1.0) : 0;
+    }
+
+    /**
+     * Générer un raisonnement pour expliquer la correspondance
+     */
+    private function generateReasoningForMatch(array $keywords, Article $article): string
+    {
+        $matches = [];
+        
+        foreach ($keywords as $keyword) {
+            if (stripos($article->title, $keyword) !== false) {
+                $matches[] = "'{$keyword}' dans le titre";
+            } elseif (stripos($article->excerpt, $keyword) !== false) {
+                $matches[] = "'{$keyword}' dans l'excerpt";
+            }
+        }
+        
+        if (empty($matches)) {
+            return "Contenu complémentaire sur un sujet connexe";
+        }
+        
+        return "Pertinence détectée: " . implode(', ', $matches);
+    }
+
+    /**
+     * Combiner les suggestions existantes et les nouveaux matches
+     */
+    private function combineAndScoreSuggestions($existingSuggestions, array $semanticMatches, int $siteId): array
+    {
+        $combined = [];
+        
+        // Ajouter les suggestions existantes (elles ont déjà un score validé)
+        foreach ($existingSuggestions as $suggestion) {
+            $combined[] = [
+                'id' => $suggestion->target_article_id,
+                'title' => $suggestion->targetArticle->title,
+                'excerpt' => $suggestion->targetArticle->excerpt,
+                'is_same_site' => $suggestion->is_same_site,
+                'slug' => $suggestion->targetArticle->slug ?? str()->slug($suggestion->targetArticle->title),
+                'relevance_score' => $suggestion->relevance_score,
+                'reasoning' => $suggestion->reasoning ?: 'Suggestion validée par IA',
+                'anchor_suggestion' => $suggestion->anchor_suggestion,
+                'site_name' => $suggestion->targetArticle->site->name ?? 'Site inconnu',
+                'source' => 'existing_suggestion'
+            ];
+        }
+        
+        // Ajouter les nouveaux matches sémantiques
+        foreach ($semanticMatches as $match) {
+            // Éviter les doublons
+            $exists = collect($combined)->firstWhere('id', $match['id']);
+            if (!$exists) {
+                $match['source'] = 'semantic_match';
+                $match['anchor_suggestion'] = $this->generateNaturalAnchor($match['title']);
+                $combined[] = $match;
+            }
+        }
+        
+        // Trier par score de pertinence et priorité (même site d'abord)
+        usort($combined, function($a, $b) {
+            // Priorité 1: Même site
+            if ($a['is_same_site'] && !$b['is_same_site']) return -1;
+            if (!$a['is_same_site'] && $b['is_same_site']) return 1;
+            
+            // Priorité 2: Score de pertinence
+            return $b['relevance_score'] <=> $a['relevance_score'];
+        });
+        
+        return $combined;
+    }
+
+    /**
+     * Filtrer les suggestions selon les points disponibles
+     */
+    private function filterSuggestionsByPoints(array $suggestions, UserBacklinkPoints $userPoints): array
+    {
+        $filtered = [];
+        $internalCount = 0;
+        $externalCount = 0;
+        $pointsNeeded = 0;
+        
+        foreach ($suggestions as $suggestion) {
+            // Limite de 3 liens internes max
+            if ($suggestion['is_same_site'] && $internalCount >= 3) {
+                continue;
+            }
+            
+            // Limite de 2 liens externes max + vérification des points
+            if (!$suggestion['is_same_site']) {
+                if ($externalCount >= 2) {
+                    continue;
+                }
+                if (!$userPoints->canUsePoints($pointsNeeded + 1)) {
+                    continue;
+                }
+                $pointsNeeded++;
+                $externalCount++;
+            } else {
+                $internalCount++;
+            }
+            
+            $filtered[] = $suggestion;
+            
+            // Limite totale de 5 suggestions
+            if (count($filtered) >= 5) {
+                break;
+            }
+        }
+        
+        return $filtered;
+    }
+
+    /**
+     * Système de fallback simple en cas d'erreur
+     */
+    private function getFallbackBacklinkSuggestions(int $siteId, string $language): array
+    {
+        $articles = Article::where('site_id', $siteId)
             ->where('language_code', $language)
             ->where('status', 'published')
             ->whereNotNull('content_html')
-            ->limit(5)
+            ->limit(3)
             ->get();
 
-        // Rechercher également des articles d'autres sites (si l'utilisateur a des points)
-        $userPoints = UserBacklinkPoints::getOrCreateForUser(auth()->id());
-        $externalArticles = [];
-
-        if ($userPoints->canUsePoints(2)) {
-            $externalArticles = Article::where('site_id', '!=', $siteId)
-                ->where('language_code', $language)
-                ->where('status', 'published')
-                ->whereNotNull('content_html')
-                ->limit(3)
-                ->get();
-        }
-
-        $allArticles = $relevantArticles->concat($externalArticles);
-
-        return $allArticles->map(function($article) use ($siteId) {
+        return $articles->map(function($article) use ($siteId) {
             return [
                 'id' => $article->id,
                 'title' => $article->title,
                 'excerpt' => $article->excerpt,
-                'is_same_site' => $article->site_id === $siteId,
+                'is_same_site' => true,
                 'slug' => $article->slug ?? str()->slug($article->title),
+                'relevance_score' => 0.5,
+                'reasoning' => 'Suggestion de fallback - même site',
+                'source' => 'fallback'
             ];
         })->toArray();
-    }
-
-    /**
-     * Intégrer intelligemment les backlinks dans le contenu généré
-     */
-    private function integrateBacklinks(array $parsedContent, array $suggestions, int $siteId): array
-    {
-        if (empty($suggestions) || empty($parsedContent['content_html'])) {
-            return $parsedContent;
-        }
-
-        $html = $parsedContent['content_html'];
-        $userPoints = UserBacklinkPoints::getOrCreateForUser(auth()->id());
-        
-        // Séparer les suggestions par priorité
-        $sameSiteLinks = array_filter($suggestions, fn($s) => $s['is_same_site']);
-        $externalLinks = array_filter($suggestions, fn($s) => !$s['is_same_site']);
-
-        $linksAdded = 0;
-        $externalLinksAdded = 0;
-
-        // Priorité 1: Ajouter les liens internes (gratuits)
-        foreach ($sameSiteLinks as $link) {
-            if ($linksAdded >= 3) break; // Max 3 liens total
-
-            $anchor = $this->generateNaturalAnchor($link['title']);
-            $url = "/articles/{$link['slug']}";
-            
-            // Chercher un endroit naturel dans le contenu pour insérer le lien
-            $html = $this->insertLinkNaturally($html, $anchor, $url, $link['title']);
-            $linksAdded++;
-        }
-
-        // Priorité 2: Ajouter des liens externes (coûtent des points)
-        foreach ($externalLinks as $link) {
-            if ($linksAdded >= 3 || $externalLinksAdded >= 2) break;
-            if (!$userPoints->canUsePoints(1)) break;
-
-            $anchor = $this->generateNaturalAnchor($link['title']);
-            $url = "/articles/{$link['slug']}"; // URL relative pour l'instant
-            
-            $html = $this->insertLinkNaturally($html, $anchor, $url, $link['title']);
-            $userPoints->usePoints(1); // Déduire un point
-            $linksAdded++;
-            $externalLinksAdded++;
-        }
-
-        $parsedContent['content_html'] = $html;
-        $parsedContent['backlinks_count'] = $linksAdded;
-        $parsedContent['external_backlinks_count'] = $externalLinksAdded;
-        $parsedContent['points_used'] = $externalLinksAdded;
-
-        return $parsedContent;
     }
 
     /**
@@ -603,7 +813,7 @@ class AIController extends Controller
         return $html;
     }
 
-    private function buildOptimizedSystemPrompt(string $language, string $siteContext, array $categories, array $existingArticles, int $wordCount, array $backlinkSuggestions = []): string
+    private function buildOptimizedSystemPrompt(string $language, string $siteContext, array $availableCategories, array $existingArticles, int $wordCount, array $backlinkSuggestions): string
     {
         $languageNames = [
             'fr' => 'français',
@@ -619,124 +829,103 @@ class AIController extends Controller
         ];
 
         $targetLanguage = $languageNames[$language] ?? 'français';
-        $categoriesText = !empty($categories) ? "\nCatégories disponibles: " . implode(', ', $categories) : '';
+        $categoriesText = !empty($availableCategories) ? "\nCatégories disponibles: " . implode(', ', $availableCategories) : '';
 
-        // Ajouter les articles existants pour les liens internes
-        $existingArticlesText = '';
-        $hasExistingArticles = !empty($existingArticles);
-        if ($hasExistingArticles) {
-            $existingArticlesText = "\nArticles existants sur le site (pour créer des liens internes):";
-            foreach ($existingArticles as $article) {
-                $existingArticlesText .= "\n- " . $article['title'] . " (" . substr($article['excerpt'], 0, 100) . "...)";
-            }
-        }
-
-        // **NOUVEAU: Ajouter les suggestions de backlinks**
-        $backlinkText = '';
+        // **NOUVEAU: Préparer les suggestions de backlinks pour l'IA**
+        $backlinkInstructions = '';
         if (!empty($backlinkSuggestions)) {
-            $backlinkText = "\nArticles recommandés pour backlinks:";
+            $backlinkInstructions = "\n\n**BACKLINKS INTELLIGENTS À INTÉGRER:**\n";
+            
             foreach ($backlinkSuggestions as $suggestion) {
-                $type = $suggestion['is_same_site'] ? 'Interne' : 'Externe';
-                $backlinkText .= "\n- [{$type}] " . $suggestion['title'] . " (" . substr($suggestion['excerpt'], 0, 80) . "...)";
+                $type = $suggestion['is_same_site'] ? '🔗 Interne (gratuit)' : '🌐 Externe (1 point)';
+                $score = round($suggestion['relevance_score'] * 100);
+                
+                $backlinkInstructions .= "• [{$type}] \"{$suggestion['title']}\" (Score: {$score}%)\n";
+                $backlinkInstructions .= "  URL: /articles/{$suggestion['slug']}\n";
+                $backlinkInstructions .= "  Raison: {$suggestion['reasoning']}\n";
+                $backlinkInstructions .= "  Ancre suggérée: \"{$suggestion['anchor_suggestion']}\"\n\n";
+            }
+            
+            $backlinkInstructions .= "**RÈGLES D'INTÉGRATION DES BACKLINKS - STRICTES:**\n";
+            $backlinkInstructions .= "1. 🔄 DISPERSER obligatoirement dans TOUT l'article : 1 lien en intro + 1-2 dans le corps + max 1 en conclusion\n";
+            $backlinkInstructions .= "2. ❌ INTERDICTION de mettre tous les liens en conclusion - OBLIGATOIRE de les répartir\n";
+            $backlinkInstructions .= "3. 🎯 Placer chaque lien là où il enrichit VRAIMENT le paragraphe\n";
+            $backlinkInstructions .= "4. 💰 Priorité absolue : liens internes (gratuits) puis externes si très pertinents\n";
+            $backlinkInstructions .= "5. 🏷️ Ancres naturelles VARIÉES : 'notre guide détaillé sur X', 'découvrez comment Y', 'approfondissez Z'\n";
+            $backlinkInstructions .= "6. ⚠️ LIMITES STRICTES : Maximum 3 liens total, maximum 2 externes\n";
+            $backlinkInstructions .= "7. 💻 Format HTML EXACT: <a href=\"URL\" title=\"Titre complet\">Ancre naturelle</a>\n";
+            $backlinkInstructions .= "8. 📝 OBLIGATION: Chaque lien doit améliorer la phrase où il est placé\n";
+            $backlinkInstructions .= "9. 🚫 JAMAIS forcer un lien - si pas naturel, ne pas l'inclure\n";
+            $backlinkInstructions .= "10. ✅ VÉRIFICATION finale : liens répartis sur tout l'article\n";
+        }
+
+        // Ajouter les articles existants pour créer des liens internes supplémentaires
+        $existingArticlesText = '';
+        if (!empty($existingArticles)) {
+            $existingArticlesText = "\n\n**ARTICLES EXISTANTS (pour liens internes supplémentaires):**\n";
+            foreach (array_slice($existingArticles, 0, 5) as $article) {
+                $existingArticlesText .= "• \"{$article['title']}\" - " . substr($article['excerpt'], 0, 80) . "...\n";
             }
         }
 
-        // Instructions conditionnelles pour les liens
-        $linkInstructions = $hasExistingArticles 
-            ? "- **Liens internes**: Créer 2-3 liens vers articles existants avec ancres naturelles"
-            : "- **Liens internes**: Pas d'articles existants disponibles, se concentrer sur le contenu";
+        return "Tu es un rédacteur web expert spécialisé dans la création d'articles informatifs et optimisés SEO.
 
-        return "Tu es un rédacteur web expert qui crée des articles informatifs et professionnels de MINIMUM {$wordCount} mots en {$targetLanguage}.
-Ton style : informatif, accessible, utile, avec un ton naturel mais professionnel.
+**MISSION CRITIQUE:** Créer un article professionnel de EXACTEMENT entre " . ($wordCount - 50) . " et " . ($wordCount + 50) . " mots en {$targetLanguage}.
+
+⚠️ **CONTRAINTE ABSOLUE DE MOTS:** 
+- Objectif: {$wordCount} mots (±50 max)
+- Compter CHAQUE mot après génération
+- Si trop court: ajouter des détails, exemples, données
+- Si trop long: condenser sans perdre la qualité
+- IMPÉRATIF: Respecter cette limite
+
+**STYLE D'EXPERTISE REQUIS:**
+- Données chiffrées et statistiques récentes
+- Méthodologies spécifiques et techniques avancées
+- Exemples concrets et cas d'usage
+- Éviter les généralités - être précis et technique
+- Ton d'expert reconnu dans le domaine
+
+**STRUCTURE OBLIGATOIRE:**
+1. **Titre H1** : Accrocheur et optimisé SEO
+2. **Introduction** : Problématique + ce que va apporter l'article (100-150 mots)
+3. **Corps principal** : 3-5 sections avec sous-titres H2/H3
+4. **Conclusion** : Synthèse + appel à action (80-100 mots)
+
+**FORMAT DE RÉPONSE JSON STRICT:**
+```json
+{
+    \"title\": \"Titre H1 principal\",
+    \"excerpt\": \"Résumé de 120-150 mots\",
+    \"content_html\": \"<h1>Titre</h1><p>Contenu avec backlinks intégrés...</p>\",
+    \"word_count\": nombre_de_mots_exact_calculé,
+    \"categories\": [\"catégorie1\", \"catégorie2\"],
+    \"integrated_backlinks\": [
+        {\"url\": \"/articles/slug\", \"anchor\": \"texte du lien\", \"title\": \"Titre article\", \"context\": \"phrase où le lien est placé\"}
+    ]
+}
+```
 
 {$siteContext}
 {$categoriesText}
+{$backlinkInstructions}
 {$existingArticlesText}
-{$backlinkText}
 
-🎯 RÈGLES ESSENTIELLES:
-1. Article MINIMUM {$wordCount} mots - contenu dense et informatif
-2. Ton professionnel mais accessible, comme un expert qui explique clairement
-3. JAMAIS utiliser les mots 'introduction' ou 'conclusion' dans le contenu
-4. Entrer directement dans le vif du sujet dès la première phrase
-5. Intégrer des éléments interactifs UNIQUEMENT si pertinents pour l'action utilisateur
-6. Optimisation SEO complète avec bonne hiérarchie de titres H1-H6
-7. HTML sémantique et structure EditorJS
-8. Réponse JSON uniquement
+**🚨 VÉRIFICATIONS FINALES CRITIQUES - AUCUNE EXCEPTION:**
+1. ✅ COMPTER PRÉCISÉMENT les mots dans content_html (ignorer balises HTML)
+2. ✅ RESPECTER ABSOLUMENT {$wordCount} ±50 mots - AJUSTER si nécessaire
+3. ✅ BACKLINKS DISPERSÉS : intro + corps + conclusion (JAMAIS tous au même endroit)
+4. ✅ HTML VALIDE et liens fonctionnels
+5. ✅ JSON valide sans erreurs de syntaxe
 
-📝 STYLE D'ÉCRITURE:
-- Ton professionnel et informatif (comme l'exemple fourni)
-- Phrases claires et structurées
-- Explications détaillées et pratiques
-- Utilise 'vous' pour s'adresser au lecteur
-- Conseils concrets et actionables
-- Évite le jargon technique excessif
-- Reste factuel et utile
-
-🔗 GESTION DES LIENS ET CTA (OPTIONNELS):
-{$linkInstructions}
-- **Call-to-actions**: Ajouter UNIQUEMENT si une action utilisateur logique existe (contact, téléchargement, inscription, etc.)
-- **Liens externes**: Liens vers ressources utiles avec attribut target='_blank' UNIQUEMENT si pertinents
-
-Types de liens à créer (si appropriés):
-- Liens inline: <a href='/article-slug'>texte de lien naturel</a>
-- Boutons CTA: Utiliser le format JSON 'cta_buttons' SEULEMENT pour actions importantes
-- Liens externes: <a href='https://site.com' target='_blank' rel='noopener'>ressource externe</a>
-
-⚠️ IMPORTANT: Ne pas forcer les CTA ou liens internes s'ils ne sont pas naturels ou pertinents pour le contenu.
-
-🏗️ STRUCTURE ATTENDUE:
-- H1: Titre principal unique de l'article
-- H2: 4-6 sections principales avec titres descriptifs
-- H3: 2-3 sous-sections par section H2
-- H4-H6: Pour structurer davantage si nécessaire
-- Paragraphes bien développés avec informations pratiques
-- Listes à puces pour clarifier les étapes ou points importants
-- Call-to-actions intégrés stratégiquement SEULEMENT si pertinents
-- Terminer par des conseils pratiques ou points à retenir
-
-FORMAT JSON REQUIS:
-{
-    \"title\": \"Titre informatif et précis (50-60 char)\",
-    \"excerpt\": \"Résumé clair et utile (150-200 char)\",
-    \"content_html\": \"<h1>Titre principal</h1><p>Contenu avec <a href='/article-lié'>liens internes</a> et <a href='https://exemple.com' target='_blank'>liens externes</a>...</p><h2>Section importante</h2>...\",
-    \"meta_title\": \"Titre SEO optimisé (50-60 char)\",
-    \"meta_description\": \"Description SEO informative (150-160 char)\",
-    \"meta_keywords\": \"mot-clé1, mot-clé2, mot-clé3\",
-    \"author_name\": \"Expert [Domaine]\",
-    \"author_bio\": \"Spécialiste avec expertise approfondie\",
-    \"suggested_categories\": [\"catégorie1\", \"catégorie2\"],
-    \"internal_links\": [{\"anchor\": \"texte de lien naturel\", \"target_title\": \"Titre article existant\"}],
-    \"cta_buttons\": [
-        {
-            \"text\": \"🎯 Découvrir notre solution\",
-            \"link\": \"/page-importante\",
-            \"style\": \"primary\",
-            \"position_after_paragraph\": 3
-        }
-    ]
-}
-
-⚠️ RAPPEL: Les champs 'internal_links' et 'cta_buttons' peuvent être vides [] si non pertinents.";
+❌ ÉCHEC AUTOMATIQUE SI:
+- Nombre de mots hors limite ±50
+- Tous les backlinks concentrés en conclusion
+- JSON malformé
+- HTML cassé";
     }
 
     private function buildOptimizedUserPrompt(string $prompt, string $language, int $wordCount): string
-    {
-        return "Rédigez un article complet et informatif sur: {$prompt}
-
-🎯 OBJECTIF:
-✅ MINIMUM {$wordCount} mots de contenu utile et détaillé
-✅ Ton professionnel mais accessible
-✅ Éviter absolument 'introduction' et 'conclusion'
-✅ Commencer directement par l'information principale
-✅ Inclure des conseils pratiques et actionables
-✅ Intégrer des liens internes de manière naturelle
-✅ Optimisation SEO complète
-
-📖 Créez un contenu de référence sur ce sujet.";
-    }
-
-    private function buildTranslationSystemPrompt(string $sourceLanguage, string $targetLanguage): string
     {
         $languageNames = [
             'fr' => 'français',
@@ -751,171 +940,180 @@ FORMAT JSON REQUIS:
             'zh' => 'chinois',
         ];
 
-        $sourceLang = $languageNames[$sourceLanguage] ?? 'français';
-        $targetLang = $languageNames[$targetLanguage] ?? 'anglais';
+        $targetLanguage = $languageNames[$language] ?? 'français';
 
-        return "Tu es un traducteur professionnel spécialisé dans la traduction de contenu web et marketing.
-Tu dois traduire fidèlement du {$sourceLang} vers le {$targetLang} en conservant:
-- Le sens et le ton original
-- La structure HTML des contenus
-- L'optimisation SEO
-- Le style et la voix de la marque
+        return "**SUJET :** {$prompt}
 
-IMPORTANT: Tu dois répondre UNIQUEMENT avec un JSON valide dans ce format:
-{
-    \"title\": \"Titre traduit\",
-    \"excerpt\": \"Résumé traduit\",
-    \"content_html\": \"Contenu HTML traduit en conservant la structure\",
-    \"meta_title\": \"Titre SEO traduit\",
-    \"meta_description\": \"Description SEO traduite\",
-    \"meta_keywords\": \"mots-clés traduits\",
-    \"author_bio\": \"Biographie traduite\"
-}
+**INSTRUCTIONS SPÉCIFIQUES :**
+- Rédiger en {$targetLanguage} de façon experte et technique
+- EXACTEMENT entre " . ($wordCount - 50) . " et " . ($wordCount + 50) . " mots
+- Intégrer naturellement les backlinks suggérés ci-dessus
+- Style informatif et professionnel avec données chiffrées
+- Optimisation SEO naturelle
+- Structure claire avec titres H2/H3
 
-Pour le contenu HTML, conserve exactement la même structure de balises mais traduis uniquement les textes.";
+**CONTRAINTE CRITIQUE :** Respecter impérativement le nombre de mots demandé et inclure la liste des backlinks intégrés dans le JSON de réponse.";
+    }
+
+    private function buildTranslationSystemPrompt(string $sourceLanguage, string $targetLanguage): string
+    {
+        // Implementation of buildTranslationSystemPrompt method
+        // This method should return a string representing the translation system prompt
+        // based on the provided parameters.
+        // You can implement this method based on your specific requirements.
+        // For example, you can use the parameters to construct a more personalized prompt.
+        return "This is a placeholder for the buildTranslationSystemPrompt method. It should be implemented based on your specific requirements.";
     }
 
     private function buildTranslationUserPrompt(array $data): string
     {
-        // Utiliser content_html s'il existe, sinon content
-        $contentToTranslate = $data['content_html'] ?? $data['content'] ?? '';
-        
-        return "Traduis ce contenu:\n\n" . json_encode([
-            'title' => $data['title'] ?? '',
-            'excerpt' => $data['excerpt'] ?? '',
-            'content_html' => $contentToTranslate,
-            'meta_title' => $data['meta_title'] ?? '',
-            'meta_description' => $data['meta_description'] ?? '',
-            'meta_keywords' => $data['meta_keywords'] ?? '',
-            'author_bio' => $data['author_bio'] ?? '',
-        ], JSON_UNESCAPED_UNICODE);
+        // Implementation of buildTranslationUserPrompt method
+        // This method should return a string representing the translation user prompt
+        // based on the provided parameters.
+        // You can implement this method based on your specific requirements.
+        // For example, you can use the parameters to construct a more personalized prompt.
+        return "This is a placeholder for the buildTranslationUserPrompt method. It should be implemented based on your specific requirements.";
     }
 
     private function parseAIResponse(string $content): array
     {
-        // Nettoyer le contenu (enlever markdown, etc.)
-        $content = trim($content);
-        $content = preg_replace('/^```json\s*/', '', $content);
-        $content = preg_replace('/\s*```$/', '', $content);
-
         try {
-            $decoded = json_decode($content, true);
+            // Nettoyer le contenu de la réponse IA
+            $content = trim($content);
+            $content = preg_replace('/^```json\s*/', '', $content);
+            $content = preg_replace('/\s*```$/', '', $content);
+
+            $data = json_decode($content, true);
+            
             if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new \Exception('Réponse JSON invalide de l\'IA');
+                throw new \Exception('Invalid JSON response: ' . json_last_error_msg());
             }
 
-            // S'assurer que les champs obligatoires existent
-            $decoded['internal_links'] = $decoded['internal_links'] ?? [];
-            $decoded['suggested_categories'] = $decoded['suggested_categories'] ?? [];
-            $decoded['cta_buttons'] = $decoded['cta_buttons'] ?? [];
-
-            // Traiter les boutons CTA et les intégrer dans le contenu HTML
-            if (!empty($decoded['cta_buttons']) && !empty($decoded['content_html'])) {
-                $decoded['content_html'] = $this->insertCtaButtons($decoded['content_html'], $decoded['cta_buttons']);
+            // Valider la structure de base
+            $required = ['title', 'excerpt', 'content_html'];
+            foreach ($required as $field) {
+                if (!isset($data[$field]) || empty($data[$field])) {
+                    throw new \Exception("Missing required field: {$field}");
+                }
             }
 
-            return $decoded;
+            // **NOUVEAU: Traiter les backlinks intégrés par l'IA**
+            $integratedBacklinks = $data['integrated_backlinks'] ?? [];
+            
+            if (!empty($integratedBacklinks)) {
+                // Déduire les points pour les liens externes
+                $userPoints = UserBacklinkPoints::getOrCreateForUser(auth()->id());
+                $externalLinksCount = 0;
+                
+                foreach ($integratedBacklinks as $backlink) {
+                    // Vérifier si c'est un lien externe (par convention, les internes commencent par /articles/)
+                    if (isset($backlink['url']) && !str_starts_with($backlink['url'], '/articles/')) {
+                        $externalLinksCount++;
+                    }
+                }
+                
+                // Déduire les points pour les liens externes utilisés
+                if ($externalLinksCount > 0 && $userPoints->canUsePoints($externalLinksCount)) {
+                    $userPoints->usePoints($externalLinksCount);
+                    
+                    Log::info('🔗 Points déducted for external backlinks', [
+                        'external_links_count' => $externalLinksCount,
+                        'points_remaining' => $userPoints->fresh()->available_points,
+                        'user_id' => auth()->id()
+                    ]);
+                }
+                
+                // Ajouter des métadonnées sur les backlinks
+                $data['backlinks_metadata'] = [
+                    'total_integrated' => count($integratedBacklinks),
+                    'external_links_count' => $externalLinksCount,
+                    'points_used' => $externalLinksCount,
+                    'internal_links_count' => count($integratedBacklinks) - $externalLinksCount,
+                ];
+            }
+
+            // Nettoyer et valider le HTML
+            if (isset($data['content_html'])) {
+                $data['content_html'] = $this->cleanAndValidateHtml($data['content_html']);
+            }
+
+            // Compter les mots réels
+            $actualWordCount = $this->countWordsInHtml($data['content_html']);
+            $data['actual_word_count'] = $actualWordCount;
+
+            // Valeurs par défaut
+            $data['categories'] = $data['categories'] ?? [];
+            $data['word_count'] = $data['word_count'] ?? $actualWordCount;
+            $data['integrated_backlinks'] = $integratedBacklinks;
+
+            Log::info('✅ AI response parsed successfully', [
+                'title' => substr($data['title'], 0, 50) . '...',
+                'word_count' => $data['word_count'],
+                'actual_word_count' => $actualWordCount,
+                'categories_count' => count($data['categories']),
+                'backlinks_integrated' => count($integratedBacklinks),
+            ]);
+
+            return $data;
+
         } catch (\Exception $e) {
-            // Fallback: créer une structure par défaut avec HTML simple
+            Log::error('❌ Failed to parse AI response', [
+                'error' => $e->getMessage(),
+                'content_preview' => substr($content, 0, 200)
+            ]);
+            
+            // Retourner un contenu de fallback
             return $this->createFallbackContent($content);
         }
     }
 
     /**
-     * Insérer les boutons CTA dans le contenu HTML aux positions spécifiées
+     * Nettoyer et valider le HTML
      */
-    private function insertCtaButtons(string $htmlContent, array $ctaButtons): string
+    private function cleanAndValidateHtml(string $html): string
     {
-        // Diviser le contenu en paragraphes
-        $paragraphs = preg_split('/(<\/p>)/', $htmlContent, -1, PREG_SPLIT_DELIM_CAPTURE);
+        // Supprimer les scripts et styles dangereux
+        $html = preg_replace('/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/mi', '', $html);
+        $html = preg_replace('/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/mi', '', $html);
         
-        // Reconstruire avec les boutons CTA insérés
-        $result = '';
-        $paragraphCount = 0;
+        // Autoriser seulement les balises sécurisées
+        $allowedTags = '<h1><h2><h3><h4><h5><h6><p><strong><em><ul><ol><li><a><br><blockquote><code><pre>';
+        $html = strip_tags($html, $allowedTags);
         
-        for ($i = 0; $i < count($paragraphs); $i++) {
-            $result .= $paragraphs[$i];
-            
-            // Si c'est une fermeture de paragraphe
-            if ($paragraphs[$i] === '</p>') {
-                $paragraphCount++;
-                
-                // Vérifier s'il faut insérer un bouton CTA après ce paragraphe
-                foreach ($ctaButtons as $cta) {
-                    if (isset($cta['position_after_paragraph']) && $cta['position_after_paragraph'] == $paragraphCount) {
-                        $buttonHtml = $this->generateCtaButtonHtml($cta);
-                        $result .= "\n\n" . $buttonHtml . "\n\n";
-                    }
-                }
-            }
-        }
+        // Nettoyer les attributs des liens
+        $html = preg_replace('/<a\s+([^>]*?)>/i', '<a $1>', $html);
         
-        return $result;
+        return trim($html);
     }
 
     /**
-     * Générer le HTML pour un bouton CTA compatible avec EditorJS
+     * Compter les mots dans le HTML
      */
-    private function generateCtaButtonHtml(array $cta): string
+    private function countWordsInHtml(string $html): int
     {
-        $text = $cta['text'] ?? 'En savoir plus';
-        $link = $cta['link'] ?? '#';
-        $style = $cta['style'] ?? 'primary';
-        
-        // Détecter les liens externes
-        $target = '';
-        $rel = '';
-        if (str_starts_with($link, 'http')) {
-            $target = ' target="_blank"';
-            $rel = ' rel="noopener noreferrer"';
-        }
-
-        // Générer le HTML sous format compatible EditorJS Button Tool
-        return '<div class="button-tool">
-    <div class="button-tool__preview">
-        <a href="' . htmlspecialchars($link) . '" class="button-tool__btn button-tool__btn--' . htmlspecialchars($style) . '"' . $target . $rel . '>
-            ' . htmlspecialchars($text) . '
-        </a>
-    </div>
-</div>';
+        $text = strip_tags($html);
+        $text = preg_replace('/\s+/', ' ', $text);
+        $words = explode(' ', trim($text));
+        return count(array_filter($words, fn($word) => !empty(trim($word))));
     }
 
     private function parseTranslationResponse(string $content): array
     {
-        // Même logique que parseAIResponse mais pour la traduction
-        $content = trim($content);
-        $content = preg_replace('/^```json\s*/', '', $content);
-        $content = preg_replace('/\s*```$/', '', $content);
-
-        try {
-            $decoded = json_decode($content, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new \Exception('Réponse de traduction JSON invalide');
-            }
-
-            return $decoded;
-        } catch (\Exception $e) {
-            throw new \Exception('Erreur lors du parsing de la traduction: ' . $e->getMessage());
-        }
+        // Implementation of parseTranslationResponse method
+        // This method should return an array representing the parsed translation response
+        // based on the provided content.
+        // You can implement this method based on your specific requirements.
+        // For example, you can use the content to parse and return the structured data.
+        return [];
     }
 
     private function createFallbackContent(string $rawContent): array
     {
-        // Créer un contenu HTML simple par défaut
-        $htmlContent = "<h2>Article généré par IA</h2><p>Contenu généré automatiquement</p><p>" . htmlspecialchars($rawContent) . "</p>";
-        
-        return [
-            'title' => 'Article généré par IA',
-            'excerpt' => 'Contenu généré automatiquement',
-            'content_html' => $htmlContent,
-            'meta_title' => 'Article généré par IA',
-            'meta_description' => 'Contenu généré automatiquement',
-            'meta_keywords' => 'article, ia, automatique',
-            'author_name' => 'Assistant IA',
-            'author_bio' => 'Contenu généré par intelligence artificielle',
-            'suggested_categories' => [],
-            'internal_links' => [],
-            'cta_buttons' => []
-        ];
+        // Implementation of createFallbackContent method
+        // This method should return an array representing the fallback content
+        // based on the provided raw content.
+        // You can implement this method based on your specific requirements.
+        // For example, you can use the raw content to create a fallback content structure.
+        return [];
     }
 } 

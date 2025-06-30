@@ -19,18 +19,19 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-// Routes IA
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/articles/generate-with-ai', [AIController::class, 'generateArticle']);
-    Route::post('/articles/translate', [AIController::class, 'translateArticle']);
-    
-    // Routes batch
-    Route::post('/ai/batch', [AIController::class, 'createBatch']);
-    Route::get('/ai/batches', [AIController::class, 'getUserBatches']);
-    Route::get('/ai/batch/{id}/status', [AIController::class, 'getBatchStatus']);
-    Route::get('/ai/batch/{id}/results', [AIController::class, 'getBatchResults']);
+// Routes IA - Commentées car déplacées vers routes/web.php pour utiliser CSRF au lieu de Sanctum
+// Route::middleware('auth:sanctum')->group(function () {
+//     Route::post('/articles/generate-with-ai', [AIController::class, 'generateArticle']);
+//     Route::post('/articles/translate', [AIController::class, 'translateArticle']);
+//     
+//     // Routes batch
+//     Route::post('/ai/batch', [AIController::class, 'createBatch']);
+//     Route::get('/ai/batches', [AIController::class, 'getUserBatches']);
+//     Route::get('/ai/batch/{id}/status', [AIController::class, 'getBatchStatus']);
+//     Route::get('/ai/batch/{id}/results', [AIController::class, 'getBatchResults']);
 
     // **NOUVEAU: Routes backlinks et points**
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/backlink-points', function (Request $request) {
         $userPoints = \App\Models\UserBacklinkPoints::getOrCreateForUser($request->user()->id);
         return response()->json([
@@ -73,6 +74,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/link-to-site', [\App\Http\Controllers\Api\GlobalCategoryController::class, 'linkToSite']);
         Route::get('/site-categories', [\App\Http\Controllers\Api\GlobalCategoryController::class, 'getSiteCategories']);
         Route::get('/pending-suggestions', [\App\Http\Controllers\Api\GlobalCategoryController::class, 'getPendingSuggestions']);
+    });
+
+    // **NOUVEAU: Routes pour récupération d'articles dans le formulaire**
+    Route::get('/sites/{site}/articles', [\App\Http\Controllers\Api\ArticleApiController::class, 'getSiteArticles']);
+    Route::get('/articles/{article}/full', [\App\Http\Controllers\Api\ArticleApiController::class, 'getFullArticle']);
+
+    // **NOUVEAU: Routes pour gestion des sujets de sites**
+    Route::prefix('sites/{site}/topics')->group(function () {
+        Route::get('/', [\App\Http\Controllers\SiteTopicController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\SiteTopicController::class, 'store']);
+        Route::put('/{topic}', [\App\Http\Controllers\SiteTopicController::class, 'update']);
+        Route::delete('/{topic}', [\App\Http\Controllers\SiteTopicController::class, 'destroy']);
+        Route::post('/generate-ai', [\App\Http\Controllers\SiteTopicController::class, 'generateWithAI']);
+        Route::post('/import', [\App\Http\Controllers\SiteTopicController::class, 'import']);
     });
 });
 

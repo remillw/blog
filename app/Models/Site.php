@@ -25,10 +25,21 @@ class Site extends Model
         'secondary_color',
         'accent_color',
         'description',
+        'auto_delete_after_sync',
+        'auto_article_generation',
+        'auto_schedule',
+        'auto_content_guidelines',
+        'auto_content_language',
+        'auto_word_count',
+        'last_auto_generation',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'auto_delete_after_sync' => 'boolean',
+        'auto_article_generation' => 'boolean',
+        'auto_schedule' => 'array',
+        'last_auto_generation' => 'datetime',
     ];
 
     public function owner(): BelongsTo
@@ -92,6 +103,26 @@ class Site extends Model
             ->wherePivot('language_code', $languageCode)
             ->wherePivot('is_active', true)
             ->orderByPivot('sort_order')
+            ->get();
+    }
+
+    /**
+     * **NOUVEAU: Relation vers les sujets de génération automatique**
+     */
+    public function topics(): HasMany
+    {
+        return $this->hasMany(SiteTopic::class);
+    }
+
+    /**
+     * **NOUVEAU: Obtenir les sujets actifs pour une langue spécifique**
+     */
+    public function getActiveTopicsForLanguage(string $languageCode): Collection
+    {
+        return $this->topics()
+            ->active()
+            ->byLanguage($languageCode)
+            ->byPriority()
             ->get();
     }
 }

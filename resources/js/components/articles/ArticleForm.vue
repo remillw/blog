@@ -134,25 +134,61 @@
                     </div>
 
                     <div v-else class="space-y-3">
-                        <!-- Barre de progression pendant la génération -->
-                        <div v-if="generatingWithAI" class="space-y-3 rounded-md border border-blue-200 bg-blue-50 p-4">
+                        <!-- **NOUVEAU: Affichage des points utilisateur** -->
+                        <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <div class="flex items-center gap-2">
+                                <span class="text-blue-600">💰</span>
+                                <span class="text-sm font-medium text-blue-800">Points de backlinks externes</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-lg font-bold text-blue-900">{{ userPoints }}</span>
+                                <span class="text-xs text-blue-600">point(s) disponible(s)</span>
+                                <Button 
+                                    @click="loadUserPoints" 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    class="h-6 w-6 p-0 text-blue-600 hover:text-blue-800"
+                                    title="Actualiser les points"
+                                >
+                                    🔄
+                                </Button>
+                            </div>
+                        </div>
+                        <!-- **NOUVEAU: Barre de progression de génération IA** -->
+                        <div v-if="generatingWithAI" class="space-y-4 rounded-lg border border-blue-200 bg-blue-50 p-4 mb-4">
                             <div class="flex items-center justify-between">
-                                <span class="text-sm font-medium text-blue-800">Génération en cours...</span>
-                                <span class="text-sm text-blue-600">{{ Math.round(generationProgress) }}%</span>
+                                <div class="flex items-center gap-3">
+                                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                                    <div>
+                                        <h3 class="font-medium text-blue-800">🤖 Génération IA en cours</h3>
+                                        <p class="text-sm text-blue-600">
+                                            {{ currentGeneratingLanguage ? `Langue: ${getLanguageName(currentGeneratingLanguage)}` : 'Initialisation...' }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-lg font-bold text-blue-800">{{ Math.round(generationProgress) }}%</div>
+                                    <div class="text-xs text-blue-600">{{ aiWordCount }} mots objectif</div>
+                                </div>
                             </div>
                             
-                            <!-- Barre de progression -->
-                            <div class="w-full bg-blue-200 rounded-full h-2.5">
+                            <!-- Barre de progression animée -->
+                            <div class="w-full bg-blue-200 rounded-full h-3 overflow-hidden">
                                 <div 
-                                    class="bg-blue-600 h-2.5 rounded-full transition-all duration-500 ease-out"
+                                    class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500 relative overflow-hidden"
                                     :style="{ width: generationProgress + '%' }"
-                                ></div>
+                                >
+                                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 animate-pulse"></div>
+                                </div>
                             </div>
                             
-                            <!-- Langue en cours de génération -->
-                            <div v-if="currentGeneratingLanguage" class="flex items-center gap-2 text-sm text-blue-700">
-                                <span class="animate-spin">⚙️</span>
-                                <span>Génération pour : <strong>{{ getLanguageName(currentGeneratingLanguage) }}</strong></span>
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-blue-700">
+                                    🎯 Génération d'un article expert de {{ aiWordCount }} mots
+                                </span>
+                                <span class="text-blue-600 font-medium">
+                                    ⚡ IA GPT-4o-mini
+                                </span>
                             </div>
                         </div>
 
@@ -410,6 +446,9 @@
                 </div>
             </div>
 
+            <!-- Section Récupération d'articles existants temporairement désactivée -->
+            <!-- Cette section sera réimplémentée plus tard -->
+
             <!-- Section Traduction Simplifiée -->
             <div v-if="hasContent" class="space-y-4 rounded-lg border border-purple-200 bg-purple-50 p-4">
                 <h3 class="text-lg font-semibold text-purple-900">🌍 Traduction automatique</h3>
@@ -636,6 +675,41 @@
                         <p v-else-if="externalBacklinkCount > userPoints" class="text-xs text-red-600 mt-1">
                             ⚠️ Pas assez de points ! Vous avez {{ userPoints }} point(s) disponible(s).
                         </p>
+                    </div>
+                </div>
+
+                <!-- **NOUVEAU: Compteur de mots VISIBLE EN PERMANENCE** -->
+                <div class="flex items-center justify-between mb-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <Label class="text-sm font-medium text-slate-700">📝 Contenu de l'article</Label>
+                    <div class="flex items-center gap-4 text-sm">
+                        <div class="flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-lg border border-blue-200">
+                            <span class="text-blue-700 font-semibold">{{ wordCount }} mots</span>
+                            <div v-if="aiWordCount > 0" class="flex items-center gap-1">
+                                <span class="text-blue-600">/</span>
+                                <span class="text-blue-600 font-medium">{{ aiWordCount }} objectif</span>
+                                <div 
+                                    class="w-16 h-2 bg-blue-200 rounded-full overflow-hidden ml-1"
+                                    :title="`${Math.round((wordCount / aiWordCount) * 100)}% de l'objectif atteint`"
+                                >
+                                    <div 
+                                        class="h-full rounded-full transition-all duration-500"
+                                        :class="{
+                                            'bg-green-500': wordCount >= aiWordCount * 0.9,
+                                            'bg-yellow-500': wordCount >= aiWordCount * 0.7 && wordCount < aiWordCount * 0.9,
+                                            'bg-orange-500': wordCount >= aiWordCount * 0.5 && wordCount < aiWordCount * 0.7,
+                                            'bg-red-500': wordCount < aiWordCount * 0.5
+                                        }"
+                                        :style="{ width: Math.min((wordCount / aiWordCount) * 100, 100) + '%' }"
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="form.content" class="flex items-center gap-1 text-xs font-medium">
+                            <span v-if="wordCount >= aiWordCount * 0.95" class="text-green-600">✅ Objectif atteint</span>
+                            <span v-else-if="wordCount >= aiWordCount * 0.85" class="text-yellow-600">🟡 Presque là</span>
+                            <span v-else-if="wordCount >= aiWordCount * 0.5" class="text-orange-600">🔶 À développer</span>
+                            <span v-else class="text-red-600">🔴 Trop court</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1226,6 +1300,12 @@ const translateToMultipleLanguages = async () => {
         for (const targetLanguage of selectedTranslationLanguages.value) {
             console.log('🌍 Translating to:', targetLanguage);
 
+            // Obtenir le token CSRF de manière robuste
+            const csrfToken = getCsrfToken();
+            if (!csrfToken) {
+                throw new Error('Token CSRF introuvable pour la traduction. Veuillez rafraîchir la page.');
+            }
+
             const response = await axios.post(
                 '/articles/translate',
                 {
@@ -1241,8 +1321,10 @@ const translateToMultipleLanguages = async () => {
                 },
                 {
                     headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                        'X-CSRF-TOKEN': csrfToken,
                     },
                 },
             );
@@ -1533,6 +1615,33 @@ function showNotification(type: 'success' | 'error', title: string, message: str
     }, 5000) as unknown as number;
 }
 
+// **NOUVEAU: Fonction pour obtenir le token CSRF de manière robuste**
+const getCsrfToken = (): string => {
+    // Méthode 1: Meta tag
+    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (metaToken) {
+        return metaToken;
+    }
+    
+    // Méthode 2: Depuis un form hidden input (fallback)
+    const hiddenInput = document.querySelector('input[name="_token"]') as HTMLInputElement;
+    if (hiddenInput?.value) {
+        return hiddenInput.value;
+    }
+    
+    // Méthode 3: Depuis les cookies Laravel (encore un fallback)
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'XSRF-TOKEN') {
+            return decodeURIComponent(value);
+        }
+    }
+    
+    console.error('❌ CSRF token not found in any location');
+    return '';
+};
+
 // Nouvelle fonction pour génération multi-langues
 const generateMultiLanguageArticle = async () => {
     if (!aiPrompt.value.trim() || selectedGenerationLanguages.value.length === 0) {
@@ -1591,23 +1700,58 @@ const generateMultiLanguageArticle = async () => {
             }, 300); // Moins fréquent
 
             try {
-            const response = await axios.post('/articles/generate-with-ai', requestData, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                },
-            });
+                // Obtenir le token CSRF de manière robuste
+                const csrfToken = getCsrfToken();
+                if (!csrfToken) {
+                    throw new Error('Token CSRF introuvable. Veuillez rafraîchir la page.');
+                }
+
+                console.log('🔑 Using CSRF token:', csrfToken.substring(0, 10) + '...');
+
+                const response = await axios.post('/articles/generate-with-ai', requestData, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                });
 
                 // Arrêter l'animation de progression
                 clearInterval(progressInterval);
 
-            const aiData = response.data;
-            console.log('✅ AI generation response for', targetLanguage, ':', aiData);
+                const aiData = response.data;
+                console.log('✅ AI generation response for', targetLanguage, ':', aiData);
 
-            generationResults.value.push({
-                language: targetLanguage,
-                data: aiData,
-            });
+                // **NOUVEAU: Traiter les métadonnées de backlinks**
+                if (aiData.backlinks_metadata) {
+                    console.log('🔗 Backlinks metadata for', targetLanguage, ':', aiData.backlinks_metadata);
+                    
+                    // Mettre à jour les compteurs globaux
+                    backlinkCount.value = aiData.backlinks_metadata.total_integrated || 0;
+                    externalBacklinkCount.value = aiData.backlinks_metadata.external_links_count || 0;
+                    
+                    // Afficher une notification sur les backlinks intégrés
+                    if (aiData.backlinks_metadata.total_integrated > 0) {
+                        const message = `${aiData.backlinks_metadata.total_integrated} backlink(s) intégré(s) automatiquement` +
+                            (aiData.backlinks_metadata.points_used > 0 ? ` (${aiData.backlinks_metadata.points_used} point(s) utilisé(s))` : '');
+                        
+                        showNotification('success', '🔗 Backlinks intégrés', message);
+                    }
+                }
+
+                // **NOUVEAU: Afficher les backlinks intégrés dans la console pour débugger**
+                if (aiData.integrated_backlinks && aiData.integrated_backlinks.length > 0) {
+                    console.log('🔗 Integrated backlinks:', aiData.integrated_backlinks);
+                    aiData.integrated_backlinks.forEach((link: any, index: number) => {
+                        console.log(`  ${index + 1}. ${link.anchor} → ${link.url} (Context: ${link.context?.substring(0, 50)}...)`);
+                    });
+                }
+
+                generationResults.value.push({
+                    language: targetLanguage,
+                    data: aiData,
+                });
                 
                 // Finaliser la progression pour cette langue
                 generationProgress.value = endProgress;
@@ -1639,10 +1783,15 @@ const generateMultiLanguageArticle = async () => {
             status: error.response?.status,
             data: error.response?.data,
             message: error.message,
+            headers: error.response?.headers,
         });
 
         let errorMessage = 'Erreur lors de la génération des articles';
-        if (error.response?.data?.message) {
+        
+        // Gestion spécifique de l'erreur CSRF
+        if (error.response?.status === 419 || error.message?.includes('CSRF') || error.message?.includes('csrf')) {
+            errorMessage = 'Erreur de sécurité (CSRF). Veuillez rafraîchir la page et réessayer.';
+        } else if (error.response?.data?.message) {
             errorMessage = error.response.data.message;
         } else if (error.response?.data?.error) {
             errorMessage = error.response.data.error;
@@ -1950,6 +2099,137 @@ const updateEditorContent = async (newContent: string) => {
 const selectedTranslationLanguages = ref<string[]>([]);
 const siteLanguages = ref<Language[]>([]);
 const translationResults = ref<any[]>([]);
+
+// Variables manquantes pour les articles existants
+const existingArticles = ref<any[]>([]);
+const loadingArticles = ref<boolean>(false);
+const hasSearchedArticles = ref<boolean>(false);
+const articleSearchLanguage = ref<string>('');
+const articlesPerPage = ref<number>(10);
+const loadingMoreArticles = ref<boolean>(false);
+
+// Fonction d'initialisation pour l'édition
+const initializeForEdit = async () => {
+    if (props.article) {
+        console.log('🔧 Initializing form for editing article:', props.article);
+        
+        // Remplir le formulaire avec les données de l'article
+        form.title = props.article.title || '';
+        form.excerpt = props.article.excerpt || '';
+        form.meta_title = props.article.meta_title || '';
+        form.meta_description = props.article.meta_description || '';
+        form.meta_keywords = Array.isArray(props.article.meta_keywords) 
+            ? props.article.meta_keywords.join(', ') 
+            : props.article.meta_keywords || '';
+        form.canonical_url = props.article.canonical_url || '';
+        form.author_name = props.article.author_name || '';
+        form.author_bio = props.article.author_bio || '';
+        form.status = props.article.status || 'draft';
+        form.site_id = props.article.site_id?.toString() || '';
+
+        // Gérer les dates
+        if (props.article.scheduled_at) {
+            form.scheduled_at = props.article.scheduled_at;
+        }
+
+        // Initialiser l'image de couverture si elle existe
+        if (props.article.cover_image) {
+            currentCoverImageUrl.value = props.article.cover_image;
+        }
+
+        // Gérer le contenu selon le type (avec types sûrs)
+        const article = props.article as any; // Type assertion pour les propriétés étendues
+        if (article.content_type === 'editorjs' || article.editorjs_content) {
+            // Contenu EditorJS
+            if (article.editorjs_content) {
+                form.content = JSON.stringify(article.editorjs_content);
+            } else if (props.article.content) {
+                try {
+                    const parsed = JSON.parse(props.article.content);
+                    if (parsed.blocks) {
+                        form.content = props.article.content;
+                    }
+                } catch (e) {
+                    console.warn('Failed to parse EditorJS content, treating as HTML');
+                    form.content_html = props.article.content;
+                }
+            }
+            form.content_html = props.article.content_html || '';
+        } else {
+            // Contenu HTML classique
+            form.content_html = props.article.content_html || props.article.content || '';
+            
+            // Si on a du HTML, essayer de le convertir en EditorJS
+            if (form.content_html && !form.content) {
+                try {
+                    const editorData = convertHTMLToEditorJS(form.content_html);
+                    form.content = JSON.stringify(editorData);
+                } catch (e) {
+                    console.warn('Failed to convert HTML to EditorJS:', e);
+                    // Créer un bloc paragraph simple
+                    const fallbackContent = {
+                        time: Date.now(),
+                        blocks: [{
+                            type: 'paragraph',
+                            data: { text: form.content_html.replace(/<[^>]*>/g, '') }
+                        }],
+                        version: '2.28.2'
+                    };
+                    form.content = JSON.stringify(fallbackContent);
+                }
+            }
+        }
+
+        // Initialiser le site sélectionné
+        if (form.site_id) {
+            selectedSiteValues.value = [form.site_id];
+            // Charger les données du site
+            await fetchSiteColors(parseInt(form.site_id));
+            await fetchSiteLanguages(parseInt(form.site_id));
+        }
+
+        // Initialiser la langue de l'article
+        if (props.article.language_code) {
+            currentLanguage.value = props.article.language_code;
+        }
+
+        // Initialiser les catégories sélectionnées depuis les relations
+        if (article.category_ids && Array.isArray(article.category_ids)) {
+            selectedCategoryValues.value = article.category_ids.map(String);
+            form.categories = article.category_ids;
+        } else if (props.article.categories && Array.isArray(props.article.categories)) {
+            // Fallback: utiliser les relations chargées
+            const categoryIds = props.article.categories.map((cat: any) => cat.id);
+            selectedCategoryValues.value = categoryIds.map(String);
+            form.categories = categoryIds;
+        }
+
+        console.log('✅ Form initialized with article data');
+        console.log('📝 Content type:', article.content_type);
+        console.log('📄 Has EditorJS content:', !!form.content);
+        console.log('🌐 Language:', currentLanguage.value);
+        console.log('🎨 Categories:', selectedCategoryValues.value);
+    }
+};
+
+// Initialisation au montage
+onMounted(async () => {
+    console.log('🚀 ArticleForm mounted');
+    
+    // Initialiser pour l'édition si on a un article
+    if (props.article) {
+        await initializeForEdit();
+    }
+    
+    // Charger les données initiales
+    await loadUserPoints();
+    await loadUserBatches();
+    
+    // Surveiller les changements de site pour charger les catégories
+    if (selectedSiteValues.value.length > 0) {
+        await fetchSiteCategories(parseInt(selectedSiteValues.value[0]));
+    }
+});
 </script>
 
 <style>

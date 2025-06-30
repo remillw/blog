@@ -8,6 +8,13 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+// **GÉNÉRATION AUTOMATIQUE D'ARTICLES À PARTIR DES TOPICS PROGRAMMÉS**
+Schedule::command('articles:generate-auto')
+    ->everyThirtyMinutes() // Vérifier toutes les 30 minutes
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/auto-generation.log'));
+
 // Planification automatique du nettoyage des articles synchronisés
 Schedule::command('articles:clean-synced --force')
     ->dailyAt('02:00') // Tous les jours à 2h du matin

@@ -4,11 +4,17 @@ import { cn } from '@/lib/utils'
 
 const props = defineProps<{
   class?: HTMLAttributes['class']
+  defaultValue?: string
+  modelValue?: string
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
 }>()
 </script>
 
 <template>
-  <thead :class="cn('[&_tr]:border-b', props.class)">
+  <div :class="cn('', props.class)">
     <slot />
-  </thead>
-</template>
+  </div>
+</template> 

@@ -40,6 +40,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/sites/{site}/colors', [SiteController::class, 'getColors'])->name('sites.colors');
     Route::get('/sites/{site}/categories', [SiteController::class, 'getCategories'])->name('sites.categories');
     Route::get('/sites/{site}/languages', [SiteController::class, 'getLanguages'])->name('sites.languages');
+
+    // **NOUVEAU: Routes pour la gestion des sujets via Inertia**
+    Route::prefix('sites/{site}/topics')->group(function () {
+        Route::post('/generate-ai', [App\Http\Controllers\SiteTopicController::class, 'generateWithAIWeb'])->name('site.topics.generate-ai');
+        Route::post('/import', [App\Http\Controllers\SiteTopicController::class, 'importWeb'])->name('site.topics.import');
+        Route::get('/', [App\Http\Controllers\SiteTopicController::class, 'indexWeb'])->name('site.topics.index');
+        Route::post('/', [App\Http\Controllers\SiteTopicController::class, 'storeWeb'])->name('site.topics.store');
+        Route::delete('/{topic}', [App\Http\Controllers\SiteTopicController::class, 'destroyWeb'])->name('site.topics.destroy');
+    });
+
+    // **NOUVEAU: Routes pour le calendrier éditorial des topics**
+    Route::prefix('topics')->group(function () {
+        Route::get('/', [App\Http\Controllers\TopicController::class, 'index'])->name('topics.index');
+        Route::post('/', [App\Http\Controllers\TopicController::class, 'store'])->name('topics.store');
+        Route::post('/generate-ai', [App\Http\Controllers\TopicController::class, 'generateWithAI'])->name('topics.generate-ai');
+        Route::put('/{topic}', [App\Http\Controllers\TopicController::class, 'update'])->name('topics.update');
+        Route::delete('/{topic}', [App\Http\Controllers\TopicController::class, 'destroy'])->name('topics.destroy');
+        Route::post('/{topic}/schedule', [App\Http\Controllers\TopicController::class, 'schedule'])->name('topics.schedule');
+        Route::post('/{topic}/move', [App\Http\Controllers\TopicController::class, 'move'])->name('topics.move');
+        Route::post('/{topic}/duplicate', [App\Http\Controllers\TopicController::class, 'duplicate'])->name('topics.duplicate');
+        Route::get('/date/{date}', [App\Http\Controllers\TopicController::class, 'getTopicsForDate'])->name('topics.date');
+    });
     
     // Routes pour l'IA et la traduction
     Route::post('/articles/generate-with-ai', [App\Http\Controllers\Api\AIController::class, 'generateArticle'])

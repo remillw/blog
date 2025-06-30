@@ -95,7 +95,27 @@ class SiteController extends Controller
             'accent_color' => 'required|string|regex:/^#[a-fA-F0-9]{6}$/',
             'languages' => 'required|array|min:1',
             'languages.*' => 'required|exists:languages,id',
+            // Nouveaux champs d'automatisation
+            'auto_delete_after_sync' => 'boolean',
+            'auto_article_generation' => 'boolean',
+            'auto_schedule' => 'nullable|array',
+            'auto_schedule.days' => 'nullable|array',
+            'auto_schedule.days.*' => 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
+            'auto_schedule.time' => 'nullable|string|regex:/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/',
+            'auto_content_guidelines' => 'nullable|string|max:5000',
+            'auto_content_language' => 'nullable|string|exists:languages,code',
+            'auto_word_count' => 'nullable|integer|min:100|max:5000',
         ]);
+
+        // Préparer les données de planning automatique
+        $autoSchedule = null;
+        if ($validated['auto_article_generation'] ?? false) {
+            $autoSchedule = [
+                'days' => $validated['auto_schedule']['days'] ?? [],
+                'time' => $validated['auto_schedule']['time'] ?? '09:00',
+                'enabled' => true,
+            ];
+        }
 
         $site = Site::create([
             'name' => $validated['name'],
@@ -109,6 +129,13 @@ class SiteController extends Controller
             'secondary_color' => $validated['secondary_color'],
             'accent_color' => $validated['accent_color'],
             'user_id' => Auth::id(),
+            // Nouveaux champs d'automatisation
+            'auto_delete_after_sync' => $validated['auto_delete_after_sync'] ?? false,
+            'auto_article_generation' => $validated['auto_article_generation'] ?? false,
+            'auto_schedule' => $autoSchedule,
+            'auto_content_guidelines' => $validated['auto_content_guidelines'] ?? null,
+            'auto_content_language' => $validated['auto_content_language'] ?? null,
+            'auto_word_count' => $validated['auto_word_count'] ?? 800,
         ]);
 
         $site->languages()->sync($validated['languages']);
@@ -172,7 +199,27 @@ class SiteController extends Controller
             'accent_color' => 'required|string|regex:/^#[a-fA-F0-9]{6}$/',
             'languages' => 'required|array|min:1',
             'languages.*' => 'required|exists:languages,id',
+            // Nouveaux champs d'automatisation
+            'auto_delete_after_sync' => 'boolean',
+            'auto_article_generation' => 'boolean',
+            'auto_schedule' => 'nullable|array',
+            'auto_schedule.days' => 'nullable|array',
+            'auto_schedule.days.*' => 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
+            'auto_schedule.time' => 'nullable|string|regex:/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/',
+            'auto_content_guidelines' => 'nullable|string|max:5000',
+            'auto_content_language' => 'nullable|string|exists:languages,code',
+            'auto_word_count' => 'nullable|integer|min:100|max:5000',
         ]);
+
+        // Préparer les données de planning automatique
+        $autoSchedule = null;
+        if ($validated['auto_article_generation'] ?? false) {
+            $autoSchedule = [
+                'days' => $validated['auto_schedule']['days'] ?? [],
+                'time' => $validated['auto_schedule']['time'] ?? '09:00',
+                'enabled' => true,
+            ];
+        }
 
         $site->update([
             'name' => $validated['name'],
@@ -183,6 +230,13 @@ class SiteController extends Controller
             'primary_color' => $validated['primary_color'],
             'secondary_color' => $validated['secondary_color'],
             'accent_color' => $validated['accent_color'],
+            // Nouveaux champs d'automatisation
+            'auto_delete_after_sync' => $validated['auto_delete_after_sync'] ?? false,
+            'auto_article_generation' => $validated['auto_article_generation'] ?? false,
+            'auto_schedule' => $autoSchedule,
+            'auto_content_guidelines' => $validated['auto_content_guidelines'] ?? null,
+            'auto_content_language' => $validated['auto_content_language'] ?? null,
+            'auto_word_count' => $validated['auto_word_count'] ?? 800,
         ]);
 
         $site->languages()->sync($validated['languages']);
@@ -237,19 +291,25 @@ class SiteController extends Controller
         }
 
         // Récupérer le paramètre de langue depuis la requête
-        $languageCode = $request->get('language');
+        $languageCode = $request->get('language', 'fr');
 
-        // Utiliser la relation many-to-many via la table pivot category_site
-        $query = $site->categories();
-
-        // Si un code de langue est fourni, filtrer les catégories par langue
-        if ($languageCode) {
-            // Supposons qu'on ajoute une colonne language_code dans la table categories
-            // ou qu'on utilise une relation avec les langues
-            $query->where('language_code', $languageCode);
-        }
-
-        $categories = $query->get(['categories.id', 'categories.name', 'categories.language_code']);
+        // **NOUVEAU: Utiliser les catégories globales reliées au site**
+        $categories = $site->globalCategories()
+            ->wherePivot('language_code', $languageCode)
+            ->wherePivot('is_active', true)
+            ->orderByPivot('sort_order')
+            ->get()
+            ->map(function ($category) use ($languageCode) {
+                return [
+                    'id' => $category->id,
+                    'name' => $category->getTranslatedName($languageCode),
+                    'language_code' => $languageCode,
+                    'slug' => $category->slug,
+                    'path' => $category->getPath($languageCode),
+                    'icon' => $category->icon,
+                    'color' => $category->color,
+                ];
+            });
         
         return response()->json($categories);
     }

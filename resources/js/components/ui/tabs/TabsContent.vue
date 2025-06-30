@@ -4,11 +4,12 @@ import { cn } from '@/lib/utils'
 
 const props = defineProps<{
   class?: HTMLAttributes['class']
+  value: string
 }>()
 </script>
 
 <template>
-  <thead :class="cn('[&_tr]:border-b', props.class)">
+  <div :class="cn('mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2', props.class)">
     <slot />
-  </thead>
-</template>
+  </div>
+</template> 
