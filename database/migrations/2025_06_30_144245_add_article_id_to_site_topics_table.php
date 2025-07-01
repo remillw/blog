@@ -11,9 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('site_topics', function (Blueprint $table) {
-            $table->foreignId('article_id')->nullable()->after('ai_context')->constrained()->onDelete('set null')->comment('Article généré à partir de ce topic');
-        });
+        // Vérifier si la colonne existe déjà avant de l'ajouter
+        if (!Schema::hasColumn('site_topics', 'article_id')) {
+            Schema::table('site_topics', function (Blueprint $table) {
+                $table->foreignId('article_id')->nullable()->after('assigned_to_user_id')->constrained()->onDelete('set null')->comment('Article généré à partir de ce topic');
+            });
+        }
     }
 
     /**
@@ -21,9 +24,11 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('site_topics', function (Blueprint $table) {
-            $table->dropForeign(['article_id']);
-            $table->dropColumn('article_id');
-        });
+        if (Schema::hasColumn('site_topics', 'article_id')) {
+            Schema::table('site_topics', function (Blueprint $table) {
+                $table->dropForeign(['article_id']);
+                $table->dropColumn('article_id');
+            });
+        }
     }
 };

@@ -65,6 +65,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{topic}/move', [App\Http\Controllers\TopicController::class, 'move'])->name('topics.move');
         Route::post('/{topic}/duplicate', [App\Http\Controllers\TopicController::class, 'duplicate'])->name('topics.duplicate');
         Route::get('/date/{date}', [App\Http\Controllers\TopicController::class, 'getTopicsForDate'])->name('topics.date');
+        
+        // **NOUVEAU: Route pour générer un article depuis un topic**
+        Route::post('/{topic}/generate-article', [App\Http\Controllers\TopicToArticleController::class, 'generateFromTopic'])->name('topics.generate-article');
     });
     
     // Routes pour l'IA et la traduction

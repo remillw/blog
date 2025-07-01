@@ -158,7 +158,12 @@
                             <TableRow v-for="topic in topics" :key="topic.id" class="hover:bg-gray-50">
                                 <TableCell class="font-medium">
                                     <div class="max-w-xs">
-                                        <div class="font-semibold text-gray-900">{{ topic.title }}</div>
+                                        <div class="flex items-center gap-2">
+                                            <div class="font-semibold text-gray-900">{{ topic.title }}</div>
+                                            <span v-if="topic.article_id" class="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                                                ✓ Article généré
+                                            </span>
+                                        </div>
                                         <div v-if="topic.description" class="text-sm text-gray-500 truncate">
                                             {{ topic.description }}
                                         </div>
@@ -209,6 +214,16 @@
                                 </TableCell>
                                 <TableCell class="text-right">
                                     <div class="flex items-center justify-end gap-2">
+                                        <Button 
+                                            @click="generateArticleFromTopic(topic)" 
+                                            variant="outline" 
+                                            size="sm" 
+                                            :class="topic.article_id ? 'bg-green-50 text-green-700 hover:bg-green-100 border-green-300' : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-300'" 
+                                            :disabled="generatingArticles[topic.id]"
+                                        >
+                                            {{ generatingArticles[topic.id] ? '🔄' : (topic.article_id ? '🔄' : '🤖') }} 
+                                            {{ generatingArticles[topic.id] ? 'Génération...' : (topic.article_id ? 'Regénérer l\'article' : 'Générer l\'article') }}
+                                        </Button>
                                         <Button @click="editTopic(topic)" variant="outline" size="sm">
                                             ✏️ Éditer
                                         </Button>
@@ -450,6 +465,7 @@ const showGenerateModal = ref(false);
 const editingTopic = ref(null);
 const saving = ref(false);
 const generatingTopics = ref(false);
+const generatingArticles = ref({});
 const selectedMonth = ref(props.currentDate);
 
 // Filtres
@@ -656,5 +672,64 @@ function closeModal() {
         editorial_notes: '',
     });
     keywordsString.value = '';
+}
+
+/**
+ * Génère un article directement depuis un topic
+ */
+function generateArticleFromTopic(topic: any) {
+    const action = topic.article_id ? 'regénérer' : 'générer';
+    const confirmMessage = topic.article_id 
+        ? `Voulez-vous regénérer un nouvel article avec l'IA pour le topic "${topic.title}" ? Cela créera un nouvel article.`
+        : `Voulez-vous générer un article avec l'IA pour le topic "${topic.title}" ?`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    // Marquer ce topic comme en cours de génération
+    generatingArticles.value[topic.id] = true;
+    
+    useForm({}).post(`/topics/${topic.id}/generate-article`, {
+        onSuccess: (response) => {
+            // Extraire les données de l'article depuis la session flash
+            const articleData = response.props.flash?.article_data;
+            
+            let successMessage = `✅ Article ${action === 'regénérer' ? 'regénéré' : 'généré'} avec succès !`;
+            
+            if (articleData) {
+                successMessage += `\n📝 Titre: ${articleData.title}\n📊 ${articleData.word_count} mots (≈${articleData.reading_time} min de lecture)`;
+                
+                // Proposer d'ouvrir l'article pour édition
+                if (confirm(successMessage + '\n\nVoulez-vous ouvrir l\'article pour l\'éditer ?')) {
+                    window.open(articleData.edit_url, '_blank');
+                }
+            } else {
+                alert(successMessage);
+            }
+            
+            // Recharger la page pour voir les changements
+            router.reload();
+        },
+        onError: (errors) => {
+            console.error('❌ Erreur lors de la génération de l\'article:', errors);
+            
+            // Afficher le message d'erreur
+            let errorMessage = `Erreur lors de la ${action}ation de l'article`;
+            if (errors.message) {
+                errorMessage = errors.message;
+            } else if (typeof errors === 'string') {
+                errorMessage = errors;
+            } else if (errors.error) {
+                errorMessage = errors.error;
+            }
+            
+            alert('❌ ' + errorMessage);
+        },
+        onFinish: () => {
+            // Enlever l'état de génération
+            generatingArticles.value[topic.id] = false;
+        }
+    });
 }
 </script>
