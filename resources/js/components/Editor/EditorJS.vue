@@ -88,6 +88,9 @@ class ButtonTool extends CustomTool {
 
         const buttonPreview = document.createElement('div');
         buttonPreview.classList.add('button-tool__preview');
+        buttonPreview.style.position = 'relative';
+        buttonPreview.style.cursor = 'pointer';
+        buttonPreview.title = 'Cliquez pour éditer ce call-to-action';
 
         const button = document.createElement('a');
         button.classList.add('button-tool__btn');
@@ -98,10 +101,27 @@ class ButtonTool extends CustomTool {
         if (this.data.rel) {
             button.rel = this.data.rel;
         }
+        
+        // Appliquer les couleurs inline selon le style
+        this.applyInlineColors(button);
+        
         button.onclick = (e) => e.preventDefault(); // Empêcher la navigation en mode édition
 
+        // Ajouter un gestionnaire pour éditer directement en cliquant sur le bouton
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.renderEditMode();
+        });
+
+        // Ajouter aussi un gestionnaire de double-clic pour une édition encore plus rapide
+        button.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.renderEditMode();
+        });
+
         buttonPreview.appendChild(button);
-        this.wrapper.appendChild(buttonPreview);
 
         // Ajouter le badge "CTA" pour différencier des liens
         const ctaBadge = document.createElement('div');
@@ -118,9 +138,55 @@ class ButtonTool extends CustomTool {
             padding: 2px 6px;
             border-radius: 8px;
             font-family: monospace;
+            pointer-events: none;
         `;
-        buttonPreview.style.position = 'relative';
         buttonPreview.appendChild(ctaBadge);
+
+        // Ajouter un bouton d'édition visible
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'cta-edit-button';
+        editButton.innerHTML = '✏️';
+        editButton.title = 'Éditer ce call-to-action';
+        editButton.style.cssText = `
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            width: 24px;
+            height: 24px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+            opacity: 0;
+        `;
+
+        editButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.renderEditMode();
+        });
+
+        // Montrer/cacher le bouton d'édition au survol
+        buttonPreview.addEventListener('mouseenter', () => {
+            editButton.style.opacity = '1';
+            editButton.style.transform = 'scale(1.1)';
+        });
+
+        buttonPreview.addEventListener('mouseleave', () => {
+            editButton.style.opacity = '0';
+            editButton.style.transform = 'scale(1)';
+        });
+
+        buttonPreview.appendChild(editButton);
+        this.wrapper.appendChild(buttonPreview);
     }
 
     renderEditMode() {
@@ -146,6 +212,9 @@ class ButtonTool extends CustomTool {
             button.rel = this.data.rel;
         }
         button.onclick = (e) => e.preventDefault();
+        
+        // Appliquer les couleurs inline aussi en mode édition
+        this.applyInlineColors(button);
 
         buttonPreview.appendChild(button);
 
@@ -167,6 +236,23 @@ class ButtonTool extends CustomTool {
         textInput.addEventListener('input', () => {
             this.data.text = textInput.value;
             button.textContent = textInput.value;
+        });
+
+        // Auto-focus et sélection du texte quand on entre en mode édition
+        setTimeout(() => {
+            textInput.focus();
+            textInput.select();
+        }, 100);
+
+        // Raccourcis clavier pour une édition plus rapide
+        textInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.renderViewMode(); // Sauvegarder et revenir à la vue
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.renderViewMode(); // Annuler et revenir à la vue
+            }
         });
 
         textGroup.appendChild(textLabel);
@@ -238,6 +324,8 @@ class ButtonTool extends CustomTool {
             button.classList.remove(`button-tool__btn--${this.data.style}`);
             this.data.style = styleSelect.value;
             button.classList.add(`button-tool__btn--${this.data.style}`);
+            // Réappliquer les couleurs inline avec le nouveau style
+            this.applyInlineColors(button);
         });
 
         styleGroup.appendChild(styleLabel);
@@ -379,96 +467,134 @@ class ButtonTool extends CustomTool {
     }
 
     setupHoverSystem() {
+        // Le système de hover est maintenant simplifié car nous avons l'édition directe
+        // On garde juste une indication visuelle simple
         if (!this.wrapper) return;
-
-        let hoverTimeout: number;
-        let tooltip: HTMLElement | null = null;
 
         this.wrapper.addEventListener('mouseenter', () => {
             if (this.isEditing) return;
-
-            hoverTimeout = setTimeout(() => {
-                tooltip = this.createCtaTooltip();
-                document.body.appendChild(tooltip);
-                this.positionCtaTooltip(tooltip);
-            }, 300) as unknown as number; // Plus rapide que les liens
+            
+            // Ajouter un effet visuel simple au survol
+            const button = this.wrapper.querySelector('.button-tool__btn');
+            if (button) {
+                (button as HTMLElement).style.transform = 'translateY(-2px)';
+                (button as HTMLElement).style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+            }
         });
 
         this.wrapper.addEventListener('mouseleave', () => {
-            clearTimeout(hoverTimeout);
-            if (tooltip) {
-                tooltip.remove();
-                tooltip = null;
+            if (this.isEditing) return;
+            
+            const button = this.wrapper.querySelector('.button-tool__btn');
+            if (button) {
+                (button as HTMLElement).style.transform = 'translateY(0)';
+                (button as HTMLElement).style.boxShadow = 'none';
             }
         });
     }
 
-    createCtaTooltip(): HTMLElement {
-        const tooltip = document.createElement('div');
-        tooltip.className = 'cta-hover-tooltip';
-        tooltip.style.cssText = `
-            position: fixed;
-            background: #f59e0b;
-            color: white;
+
+
+    // Méthode pour appliquer les couleurs inline basées sur les couleurs du site
+    applyInlineColors(button: HTMLElement) {
+        // Récupérer les couleurs du site depuis les props Vue (via un event global ou data attribute)
+        const siteColors = this.getSiteColors();
+        
+        let backgroundColor = '';
+        let color = 'white';
+        let borderColor = '';
+        
+        switch (this.data.style) {
+            case 'primary':
+                backgroundColor = siteColors.primary;
+                borderColor = siteColors.primary;
+                break;
+            case 'secondary':
+                backgroundColor = siteColors.secondary;
+                borderColor = siteColors.secondary;
+                break;
+            case 'success':
+                backgroundColor = '#22c55e';
+                borderColor = '#22c55e';
+                break;
+            case 'warning':
+                backgroundColor = '#f59e0b';
+                borderColor = '#f59e0b';
+                break;
+            case 'danger':
+                backgroundColor = '#ef4444';
+                borderColor = '#ef4444';
+                break;
+            case 'outline':
+                backgroundColor = 'transparent';
+                color = siteColors.primary;
+                borderColor = siteColors.primary;
+                break;
+            default:
+                backgroundColor = siteColors.primary;
+                borderColor = siteColors.primary;
+        }
+        
+        // Appliquer les styles inline
+        button.style.cssText = `
+            display: inline-block;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
             border-radius: 8px;
-            padding: 8px 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 10000;
-            font-size: 12px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            animation: tooltipAppear 0.2s ease-out;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            text-decoration: none;
+            border: 2px solid ${borderColor};
+            min-width: 160px;
+            background-color: ${backgroundColor};
+            color: ${color};
         `;
-
-        tooltip.innerHTML = `
-            <span>CTA: ${this.data.text} → ${this.data.link || 'Aucun lien'}</span>
-            <button type="button" class="edit-cta-btn" style="
-                background: white;
-                color: #f59e0b;
-                border: none;
-                border-radius: 4px;
-                padding: 2px 6px;
-                font-size: 10px;
-                cursor: pointer;
-                flex-shrink: 0;
-                font-weight: bold;
-            ">
-                ✏️ Edit
-            </button>
-        `;
-
-        const editBtn = tooltip.querySelector('.edit-cta-btn');
-        editBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            tooltip.remove();
-            this.renderEditMode();
+        
+        // Ajouter les effets hover via JavaScript
+        button.addEventListener('mouseenter', () => {
+            if (this.data.style === 'outline') {
+                button.style.backgroundColor = siteColors.primary;
+                button.style.color = 'white';
+            } else {
+                button.style.transform = 'translateY(-2px)';
+                button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+            }
         });
-
-        return tooltip;
+        
+        button.addEventListener('mouseleave', () => {
+            if (this.data.style === 'outline') {
+                button.style.backgroundColor = 'transparent';
+                button.style.color = siteColors.primary;
+            } else {
+                button.style.transform = 'translateY(0)';
+                button.style.boxShadow = 'none';
+            }
+        });
     }
-
-    positionCtaTooltip(tooltip: HTMLElement) {
-        if (!this.wrapper) return;
-
-        const wrapperRect = this.wrapper.getBoundingClientRect();
-        const tooltipRect = tooltip.getBoundingClientRect();
-
-        let left = wrapperRect.left + (wrapperRect.width / 2) - (tooltipRect.width / 2);
-        let top = wrapperRect.top - tooltipRect.height - 8;
-
-        // Ajuster si le tooltip sort de l'écran
-        if (left < 10) left = 10;
-        if (left + tooltipRect.width > window.innerWidth - 10) {
-            left = window.innerWidth - tooltipRect.width - 10;
+    
+    // Méthode pour récupérer les couleurs du site
+    getSiteColors() {
+        // Essayer de récupérer depuis un data attribute ou variable globale
+        const editorElement = document.querySelector('.codex-editor');
+        let siteColors = {
+            primary: '#4E8D44',
+            secondary: '#6b7280',
+            accent: '#10b981'
+        };
+        
+        if (editorElement) {
+            const primaryColor = editorElement.getAttribute('data-primary-color');
+            const secondaryColor = editorElement.getAttribute('data-secondary-color');
+            const accentColor = editorElement.getAttribute('data-accent-color');
+            
+            if (primaryColor) siteColors.primary = primaryColor;
+            if (secondaryColor) siteColors.secondary = secondaryColor;
+            if (accentColor) siteColors.accent = accentColor;
         }
-        if (top < 10) {
-            top = wrapperRect.bottom + 8;
-        }
-
-        tooltip.style.left = `${left}px`;
-        tooltip.style.top = `${top}px`;
+        
+        return siteColors;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -479,6 +605,7 @@ class ButtonTool extends CustomTool {
             style: this.data.style,
             target: this.data.target,
             rel: this.data.rel,
+            siteColors: this.getSiteColors(), // Sauvegarder les couleurs aussi
         };
     }
 
@@ -1524,6 +1651,13 @@ const initializeEditor = () => {
     };
 
     console.log('🎨 Color plugin config:', colorConfig);
+
+    // Ajouter les couleurs du site comme data attributes sur le conteneur
+    if (editorContainer.value) {
+        editorContainer.value.setAttribute('data-primary-color', props.siteColors?.primary_color || '#4E8D44');
+        editorContainer.value.setAttribute('data-secondary-color', props.siteColors?.secondary_color || '#6b7280');
+        editorContainer.value.setAttribute('data-accent-color', props.siteColors?.accent_color || '#10b981');
+    }
 
     editor.value = new EditorJS({
         holder: editorContainer.value,

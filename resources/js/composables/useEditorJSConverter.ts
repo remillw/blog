@@ -11,7 +11,19 @@ export function useEditorJSConverter() {
         },
         list: (data: any) => {
             const listTag = data.style === 'ordered' ? 'ol' : 'ul';
-            const items = data.items.map((item: string) => `<li>${item}</li>`).join('');
+            const items = data.items.map((item: any) => {
+                // Gérer différents formats d'items de liste
+                let itemText = '';
+                if (typeof item === 'string') {
+                    itemText = item;
+                } else if (item && typeof item === 'object') {
+                    // Si c'est un objet, chercher le texte dans diverses propriétés
+                    itemText = item.text || item.content || item.value || JSON.stringify(item);
+                } else {
+                    itemText = String(item);
+                }
+                return `<li>${itemText}</li>`;
+            }).join('');
             return `<${listTag}>${items}</${listTag}>`;
         },
         quote: (data: any) => {
@@ -109,7 +121,19 @@ export function useEditorJSConverter() {
             case 'list':
                 if (block.data.items && Array.isArray(block.data.items)) {
                     const listTag = block.data.style === 'ordered' ? 'ol' : 'ul';
-                    const items = block.data.items.map((item: string) => `<li>${item}</li>`).join('');
+                    const items = block.data.items.map((item: any) => {
+                        // Gérer différents formats d'items de liste
+                        let itemText = '';
+                        if (typeof item === 'string') {
+                            itemText = item;
+                        } else if (item && typeof item === 'object') {
+                            // Si c'est un objet, chercher le texte dans diverses propriétés
+                            itemText = item.text || item.content || item.value || JSON.stringify(item);
+                        } else {
+                            itemText = String(item);
+                        }
+                        return `<li>${itemText}</li>`;
+                    }).join('');
                     return `<${listTag}>${items}</${listTag}>`;
                 }
                 break;
@@ -194,8 +218,70 @@ export function useEditorJSConverter() {
             case 'button':
                 if (block.data.text) {
                     const link = block.data.link ? ` href="${block.data.link}"` : '';
+                    const target = block.data.target === '_blank' ? ' target="_blank"' : '';
+                    const rel = block.data.rel ? ` rel="${block.data.rel}"` : '';
                     const style = block.data.style || 'primary';
-                    return `<a${link} class="button button--${style}">${block.data.text}</a>`;
+                    
+                    // Récupérer les couleurs du site depuis les données sauvegardées ou utiliser les valeurs par défaut
+                    const siteColors = block.data.siteColors || {
+                        primary: '#4E8D44',
+                        secondary: '#6b7280',
+                        accent: '#10b981'
+                    };
+                    
+                    let backgroundColor = '';
+                    let color = 'white';
+                    let borderColor = '';
+                    
+                    switch (style) {
+                        case 'primary':
+                            backgroundColor = siteColors.primary;
+                            borderColor = siteColors.primary;
+                            break;
+                        case 'secondary':
+                            backgroundColor = siteColors.secondary;
+                            borderColor = siteColors.secondary;
+                            break;
+                        case 'success':
+                            backgroundColor = '#22c55e';
+                            borderColor = '#22c55e';
+                            break;
+                        case 'warning':
+                            backgroundColor = '#f59e0b';
+                            borderColor = '#f59e0b';
+                            break;
+                        case 'danger':
+                            backgroundColor = '#ef4444';
+                            borderColor = '#ef4444';
+                            break;
+                        case 'outline':
+                            backgroundColor = 'transparent';
+                            color = siteColors.primary;
+                            borderColor = siteColors.primary;
+                            break;
+                        default:
+                            backgroundColor = siteColors.primary;
+                            borderColor = siteColors.primary;
+                    }
+                    
+                    const inlineStyles = `
+                        display: inline-block;
+                        padding: 12px 24px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        text-align: center;
+                        text-decoration: none;
+                        border: 2px solid ${borderColor};
+                        min-width: 160px;
+                        background-color: ${backgroundColor};
+                        color: ${color};
+                        margin: 8px 0;
+                    `.replace(/\s+/g, ' ').trim();
+                    
+                    return `<a${link}${target}${rel} style="${inlineStyles}" class="cta-button cta-button--${style}">${block.data.text}</a>`;
                 }
                 break;
 
