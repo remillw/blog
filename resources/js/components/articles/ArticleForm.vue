@@ -530,7 +530,13 @@
 
                             <!-- Upload d'image -->
                             <div class="flex items-center gap-3">
-                                <input ref="coverImageInput" type="file" accept="image/*" class="hidden" @change="handleCoverImageUpload" />
+                                <input 
+                                    ref="coverImageInput" 
+                                    type="file" 
+                                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/svg+xml" 
+                                    class="hidden" 
+                                    @change="handleCoverImageUpload" 
+                                />
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -539,7 +545,7 @@
                                 >
                                     {{ uploadingCoverImage ? 'Uploading...' : 'Choose Image' }}
                                 </Button>
-                                <span class="text-sm text-gray-500">Max 2MB, JPG/PNG</span>
+                                <span class="text-sm text-gray-500">Max 2MB, JPG/PNG/GIF/WebP/SVG</span>
                             </div>
                         </div>
                         <InputError :message="form.errors.cover_image" />
@@ -1229,9 +1235,23 @@ const handleCoverImageUpload = async (event: Event) => {
 
     if (!file) return;
 
+    // **DEBUG: Vérifier les propriétés du fichier**
+    console.log('📁 File selected:', {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified
+    });
+
+    // Vérifier que c'est bien une image
+    if (!file.type.startsWith('image/')) {
+        showNotification('error', 'Format invalide', 'Veuillez sélectionner un fichier image valide (JPG, PNG, GIF, etc.)');
+        return;
+    }
+
     // Vérifier la taille du fichier (2MB max)
     if (file.size > 2 * 1024 * 1024) {
-        alert('File size must be less than 2MB');
+        showNotification('error', 'Fichier trop volumineux', 'L\'image ne doit pas dépasser 2MB');
         return;
     }
 
@@ -1245,19 +1265,67 @@ const handleCoverImageUpload = async (event: Event) => {
         };
         reader.readAsDataURL(file);
 
-        // Stocker le fichier dans le form
-        form.cover_image = file;
+        // Upload immédiat de l'image
+        await uploadImageToServer(file);
+        
+        // Clear any previous cover_image errors
+        if (form.errors.cover_image) {
+            form.clearErrors('cover_image');
+        }
+
     } catch (error) {
         console.error('Error uploading cover image:', error);
-        alert('Error uploading image');
+        showNotification('error', 'Erreur d\'upload', 'Erreur lors de l\'upload de l\'image');
+        currentCoverImageUrl.value = ''; // Supprimer la preview en cas d'erreur
     } finally {
         uploadingCoverImage.value = false;
+    }
+};
+
+// Nouvelle fonction pour uploader l'image directement au serveur
+const uploadImageToServer = async (file: File) => {
+    const formData = new FormData();
+    formData.append('cover_image', file);
+    formData.append('article_slug', form.title ? form.title.substring(0, 50) : 'temp');
+    
+    // Récupérer le token CSRF
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+        formData.append('_token', csrfToken);
+    }
+
+    console.log('📤 Uploading image to server...');
+
+    const response = await axios.post('/upload/cover-image', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': csrfToken || '',
+        }
+    });
+
+    if (response.data.success) {
+        // Stocker le chemin de l'image uploadée dans le form au lieu du File
+        (form as any).cover_image_path = response.data.path;
+        (form as any).cover_image_url = response.data.url;
+        form.cover_image = null; // Ne plus stocker le File object
+        
+        console.log('✅ Image uploaded successfully:', {
+            path: response.data.path,
+            url: response.data.url
+        });
+        
+        showNotification('success', 'Image uploadée', 'L\'image de couverture a été uploadée avec succès');
+    } else {
+        throw new Error('Upload failed: ' + response.data.message);
     }
 };
 
 const removeCoverImage = () => {
     currentCoverImageUrl.value = '';
     form.cover_image = null;
+    (form as any).cover_image_path = null;
+    (form as any).cover_image_url = null;
     if (coverImageInput.value) {
         coverImageInput.value.value = '';
     }
@@ -1481,6 +1549,28 @@ const submit = () => {
     console.log('📝 form.content:', form.content ? form.content.substring(0, 200) + '...' : 'empty');
     console.log('🌐 form.content_html BEFORE conversion:', form.content_html ? form.content_html.substring(0, 200) + '...' : 'empty');
 
+    // **DEBUG: Vérifier l'état du cover_image avant soumission**
+    if (form.cover_image) {
+        console.log('🖼️ Cover image details before submit:', {
+            name: form.cover_image.name,
+            size: form.cover_image.size,
+            type: form.cover_image.type,
+            isValidImage: form.cover_image.type.startsWith('image/'),
+            isValidSize: form.cover_image.size <= 2 * 1024 * 1024
+        });
+
+        // Validation côté frontend avant envoi
+        if (!form.cover_image.type.startsWith('image/')) {
+            showNotification('error', 'Image invalide', 'Le fichier sélectionné n\'est pas une image valide');
+            return;
+        }
+
+        if (form.cover_image.size > 2 * 1024 * 1024) {
+            showNotification('error', 'Fichier trop volumineux', 'L\'image ne doit pas dépasser 2MB');
+            return;
+        }
+    }
+
     // Convertir le contenu EditorJS en HTML avant l'envoi
     if (form.content) {
         try {
@@ -1501,13 +1591,32 @@ const submit = () => {
         cover_image: form.cover_image ? 'has file' : 'no file',
     });
 
+    // Ajouter le chemin de l'image au formulaire si elle existe
+    if ((form as any).cover_image_path) {
+        (form as any).cover_image = (form as any).cover_image_path;
+        console.log('🖼️ Using uploaded image path:', (form as any).cover_image_path);
+    }
+
+    // Utiliser la méthode normale Inertia.js (l'image est déjà uploadée)
     if (isEditing.value && props.article && props.article.id) {
         form.put(articleRoutes.update(props.article.id), {
             onSuccess: () => emit('close'),
+            onError: (errors) => {
+                console.error('❌ Form submission errors:', errors);
+                Object.keys(errors).forEach(key => {
+                    showNotification('error', `Erreur ${key}`, errors[key]);
+                });
+            }
         });
     } else {
         form.post(articleRoutes.store(), {
             onSuccess: () => emit('close'),
+            onError: (errors) => {
+                console.error('❌ Form submission errors:', errors);
+                Object.keys(errors).forEach(key => {
+                    showNotification('error', `Erreur ${key}`, errors[key]);
+                });
+            }
         });
     }
 };
@@ -1617,24 +1726,44 @@ function showNotification(type: 'success' | 'error', title: string, message: str
 
 // **NOUVEAU: Fonction pour obtenir le token CSRF de manière robuste**
 const getCsrfToken = (): string => {
-    // Méthode 1: Meta tag
+    // Méthode 1: Meta tag (principale)
     const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    console.log('🔍 Meta tag token:', metaToken?.substring(0, 10) + '...');
     if (metaToken) {
         return metaToken;
     }
     
-    // Méthode 2: Depuis un form hidden input (fallback)
+    // Méthode 2: Inertia page props si disponible
+    try {
+        const inertiaElement = document.getElementById('app');
+        const pageData = inertiaElement?.getAttribute('data-page');
+        if (pageData) {
+            const parsed = JSON.parse(pageData);
+            const token = parsed.props?.csrf_token || parsed.props?._token;
+            console.log('🔍 Inertia token:', token?.substring(0, 10) + '...');
+            if (token) {
+                return token;
+            }
+        }
+    } catch (e) {
+        console.warn('Could not get token from Inertia props');
+    }
+    
+    // Méthode 3: Depuis un form hidden input (fallback)
     const hiddenInput = document.querySelector('input[name="_token"]') as HTMLInputElement;
     if (hiddenInput?.value) {
+        console.log('🔍 Hidden input token:', hiddenInput.value.substring(0, 10) + '...');
         return hiddenInput.value;
     }
     
-    // Méthode 3: Depuis les cookies Laravel (encore un fallback)
+    // Méthode 4: Depuis les cookies Laravel
     const cookies = document.cookie.split(';');
     for (let cookie of cookies) {
         const [name, value] = cookie.trim().split('=');
         if (name === 'XSRF-TOKEN') {
-            return decodeURIComponent(value);
+            const decoded = decodeURIComponent(value);
+            console.log('🔍 Cookie token:', decoded.substring(0, 10) + '...');
+            return decoded;
         }
     }
     
@@ -2230,6 +2359,94 @@ onMounted(async () => {
         await fetchSiteCategories(parseInt(selectedSiteValues.value[0]));
     }
 });
+
+// Fonction alternative pour soumettre avec FormData manuel
+const submitWithManualFormData = (url: string, method: 'POST' | 'PUT' = 'POST') => {
+    const formData = new FormData();
+    
+    // Ajouter tous les champs du formulaire
+    formData.append('title', form.title);
+    formData.append('content', form.content);
+    formData.append('content_html', form.content_html);
+    formData.append('excerpt', form.excerpt || '');
+    formData.append('meta_title', form.meta_title || '');
+    formData.append('meta_description', form.meta_description || '');
+    formData.append('meta_keywords', form.meta_keywords || '');
+    formData.append('canonical_url', form.canonical_url || '');
+    formData.append('status', form.status);
+    formData.append('author_name', form.author_name || '');
+    formData.append('author_bio', form.author_bio || '');
+    formData.append('site_id', form.site_id);
+    
+    if (form.scheduled_at) {
+        formData.append('scheduled_at', form.scheduled_at);
+    }
+    
+    // Ajouter les catégories
+    form.categories.forEach((categoryId, index) => {
+        formData.append(`categories[${index}]`, categoryId.toString());
+    });
+    
+    // Ajouter l'image si présente
+    if (form.cover_image) {
+        formData.append('cover_image', form.cover_image);
+    }
+    
+    // Ajouter le token CSRF
+    const csrfToken = getCsrfToken();
+    console.log('🔑 CSRF Token retrieval:', {
+        token: csrfToken,
+        tokenLength: csrfToken?.length,
+        metaTag: document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+    });
+    
+    if (csrfToken) {
+        formData.append('_token', csrfToken);
+    }
+    
+    // Si c'est un PUT, Laravel nécessite _method
+    if (method === 'PUT') {
+        formData.append('_method', 'PUT');
+    }
+    
+    console.log('📤 FormData being sent:', {
+        url,
+        method,
+        hasFile: !!form.cover_image,
+        hasToken: !!csrfToken,
+        tokenValue: csrfToken?.substring(0, 10) + '...'
+    });
+    
+    // Envoyer avec axios - essayer avec le token dans les headers aussi
+    const headers: Record<string, string> = {
+        'Content-Type': 'multipart/form-data',
+        'X-Requested-With': 'XMLHttpRequest',
+    };
+    
+    // Ajouter le token CSRF dans les headers aussi pour plus de sûreté
+    if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+    }
+    
+    console.log('📡 Request headers:', headers);
+    
+    return axios.post(url, formData, { headers }).then(response => {
+        console.log('✅ Upload successful:', response.data);
+        emit('close');
+        // Rediriger vers la liste des articles
+        window.location.href = '/articles';
+    }).catch(error => {
+        console.error('❌ Upload failed:', error);
+        if (error.response?.data?.errors) {
+            const errors = error.response.data.errors;
+            Object.keys(errors).forEach(key => {
+                showNotification('error', `Erreur ${key}`, errors[key][0]);
+            });
+        } else {
+            showNotification('error', 'Erreur', error.response?.data?.message || 'Une erreur est survenue');
+        }
+    });
+};
 </script>
 
 <style>

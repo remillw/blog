@@ -77,12 +77,40 @@ class ArticleController extends Controller
 
     public function store(Request $request)
     {
+        // Debug de l'image si présente
+        \Log::info('ArticleController::store - Request data:', [
+            'has_file' => $request->hasFile('cover_image'),
+            'all_files' => $request->allFiles(),
+            'input_cover_image' => $request->input('cover_image'),
+            'request_method' => $request->method(),
+            'content_type' => $request->header('Content-Type')
+        ]);
+
+        if ($request->hasFile('cover_image')) {
+            $file = $request->file('cover_image');
+            \Log::info('Cover image upload attempt:', [
+                'filename' => $file->getClientOriginalName(),
+                'size' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
+                'client_mime_type' => $file->getClientMimeType(),
+                'is_valid' => $file->isValid(),
+                'error' => $file->getError(),
+                'error_message' => $file->getErrorMessage(),
+                'temp_path' => $file->getPathname(),
+                'path' => $file->path(),
+                'extension' => $file->extension(),
+                'client_extension' => $file->getClientOriginalExtension()
+            ]);
+        } else {
+            \Log::info('No file received in cover_image field');
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string',
             'content_html' => 'nullable|string', // HTML converti côté frontend
             'excerpt' => 'nullable|string',
-            'cover_image' => 'nullable|image|max:2048', // Image de couverture uploadée
+            'cover_image' => 'nullable|string', // Maintenant c'est un chemin vers le fichier déjà uploadé
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string',
             'meta_keywords' => 'nullable|string',
@@ -113,11 +141,11 @@ class ArticleController extends Controller
             $counter++;
         }
 
-        // Gérer l'upload de l'image de couverture avec un nom personnalisé
+        // Gérer l'image de couverture (déjà uploadée via /upload/cover-image)
         $coverImageUrl = null;
-        if ($request->hasFile('cover_image')) {
-            $coverImagePath = $this->storeCoverImage($request->file('cover_image'), $slug);
-            $coverImageUrl = asset('storage/' . $coverImagePath);
+        if (!empty($validated['cover_image'])) {
+            // L'image est déjà uploadée, on a juste le chemin
+            $coverImageUrl = asset('storage/' . $validated['cover_image']);
         }
 
         $article = Article::create([
@@ -196,6 +224,20 @@ class ArticleController extends Controller
 
     public function update(Request $request, Article $article)
     {
+        // Debug de l'image si présente
+        if ($request->hasFile('cover_image')) {
+            $file = $request->file('cover_image');
+            \Log::info('Cover image update attempt:', [
+                'filename' => $file->getClientOriginalName(),
+                'size' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
+                'client_mime_type' => $file->getClientMimeType(),
+                'is_valid' => $file->isValid(),
+                'error' => $file->getError(),
+                'temp_path' => $file->getPathname()
+            ]);
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string',
@@ -203,7 +245,7 @@ class ArticleController extends Controller
             'content_type' => 'nullable|string|in:html,editorjs',
             'editorjs_content' => 'nullable|array',
             'excerpt' => 'nullable|string',
-            'cover_image' => 'nullable|image|max:2048',
+            'cover_image' => 'nullable|string', // Maintenant c'est un chemin vers le fichier déjà uploadé
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string',
             'meta_keywords' => 'nullable|array',
@@ -260,15 +302,10 @@ class ArticleController extends Controller
             $slug = $newSlug;
         }
 
-        // Gérer l'upload de l'image de couverture
-        if ($request->hasFile('cover_image')) {
-            // Supprimer l'ancienne image si elle existe
-            if ($article->cover_image) {
-                $this->deleteCoverImage($article->cover_image);
-            }
-            
-            $coverImagePath = $this->storeCoverImage($request->file('cover_image'), $slug);
-            $validated['cover_image'] = asset('storage/' . $coverImagePath);
+        // Gérer l'image de couverture (déjà uploadée via /upload/cover-image)
+        if (!empty($validated['cover_image'])) {
+            // Nouvelle image uploadée
+            $validated['cover_image'] = asset('storage/' . $validated['cover_image']);
         } else {
             // Garder l'image existante
             unset($validated['cover_image']);

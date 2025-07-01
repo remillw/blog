@@ -23,6 +23,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/articles/upload-image', [ArticleController::class, 'uploadImage'])->name('articles.upload-image');
     Route::post('/articles/upload-file', [ArticleController::class, 'uploadFile'])->name('articles.upload-file');
     Route::post('/articles/upload-cover-image', [ArticleController::class, 'uploadCoverImage'])->name('articles.upload-cover-image');
+    
+    // Route dédiée pour l'upload d'images avec gestion CSRF simplifiée
+    Route::post('/upload/cover-image', [App\Http\Controllers\ImageUploadController::class, 'uploadCoverImage'])
+        ->name('upload.cover-image');
     Route::post('/articles/fetch-url-metadata', [ArticleController::class, 'fetchUrlMetadata'])->name('articles.fetch-url-metadata');
     Route::post('/articles/recover', [ArticleController::class, 'recover'])->name('articles.recover');
     Route::get('/sites/{id}/colors', [SiteController::class, 'colors'])->name('sites.colors');
