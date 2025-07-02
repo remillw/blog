@@ -599,8 +599,38 @@
                     </div>
 
                     <div class="space-y-2">
-                        <Label for="canonical_url">Canonical URL</Label>
-                        <Input id="canonical_url" v-model="form.canonical_url" type="url" :disabled="form.processing" />
+                        <Label for="canonical_url" class="flex items-center justify-between">
+                            <span class="flex items-center gap-2">
+                                Canonical URL 
+                                <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Auto-générée</span>
+                            </span>
+                            <Button 
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                @click="form.canonical_url = generateCanonicalUrl()"
+                                :disabled="!selectedSiteInfo?.url || !form.meta_title"
+                                class="h-6 px-2 text-xs"
+                                title="Régénérer l'URL canonique"
+                            >
+                                🔄 Régénérer
+                            </Button>
+                        </Label>
+                        <Input 
+                            id="canonical_url" 
+                            v-model="form.canonical_url" 
+                            type="url" 
+                            :disabled="form.processing" 
+                            :readonly="true"
+                            class="bg-gray-50 text-gray-700 cursor-not-allowed"
+                            :placeholder="selectedSiteInfo?.url ? 'Sera générée automatiquement depuis le meta title' : 'Sélectionnez d\'abord un site'"
+                        />
+                        <div class="text-xs text-gray-600">
+                            <span class="flex items-center gap-1">
+                                <span>🔗</span>
+                                <span>L'URL est générée automatiquement : <code class="bg-gray-100 px-1 rounded">{{ selectedSiteInfo?.url || '[url-du-site]' }}/blog/[meta-title-en-slug]</code></span>
+                            </span>
+                        </div>
                         <InputError :message="form.errors.canonical_url" />
                     </div>
 
@@ -837,6 +867,13 @@ const siteColors = ref({
     accent_color: '',
 });
 
+// Variable pour stocker les infos complètes du site sélectionné
+const selectedSiteInfo = ref<{
+    id: number;
+    name: string;
+    url?: string;
+} | null>(null);
+
 const selectedSiteValues = ref<string[]>([]);
 const selectedCategoryValues = ref<string[]>([]);
 const availableCategories = ref<Category[]>([]);
@@ -988,6 +1025,44 @@ const getLanguageFlag = (code: string): string => {
     return flags[code] || '🌐';
 };
 
+// Fonction pour générer un slug SEO-friendly à partir du meta title
+const generateSlugFromTitle = (title: string): string => {
+    if (!title) return '';
+    
+    return title
+        .toLowerCase()
+        .trim()
+        // Remplacer les caractères spéciaux français par leurs équivalents
+        .replace(/[àáâãäå]/g, 'a')
+        .replace(/[èéêë]/g, 'e')
+        .replace(/[ìíîï]/g, 'i')
+        .replace(/[òóôõö]/g, 'o')
+        .replace(/[ùúûü]/g, 'u')
+        .replace(/[ç]/g, 'c')
+        .replace(/[ñ]/g, 'n')
+        .replace(/[ý]/g, 'y')
+        // Remplacer les espaces et caractères non alphanumériques par des tirets
+        .replace(/[^a-z0-9]/g, '-')
+        // Supprimer les tirets multiples
+        .replace(/-+/g, '-')
+        // Supprimer les tirets en début et fin
+        .replace(/^-|-$/g, '');
+};
+
+// Fonction pour générer l'URL canonique automatiquement
+const generateCanonicalUrl = (): string => {
+    if (!selectedSiteInfo.value?.url || !form.meta_title) {
+        return '';
+    }
+    
+    const baseUrl = selectedSiteInfo.value.url.replace(/\/$/, ''); // Supprimer le slash final
+    const slug = generateSlugFromTitle(form.meta_title);
+    
+    if (!slug) return '';
+    
+    return `${baseUrl}/blog/${slug}`;
+};
+
 // Function pour sauvegarder la version actuelle avant de changer
 const saveCurrentVersion = () => {
     if (currentLanguage.value && (form.title || form.excerpt || form.content)) {
@@ -1089,14 +1164,35 @@ const fetchSiteColors = async (value: any) => {
     const siteId = value ? String(value) : '';
     if (!siteId) {
         siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
+        selectedSiteInfo.value = null;
         return;
     }
     try {
-        const response = await axios.get(siteRoutes.show(siteId) + '/colors');
-        siteColors.value = response.data;
+        // Récupérer les couleurs
+        const colorsResponse = await axios.get(siteRoutes.show(siteId) + '/colors');
+        siteColors.value = colorsResponse.data;
+        
+        // Récupérer les infos complètes du site (incluant l'URL)
+        const siteResponse = await axios.get(siteRoutes.show(siteId));
+        
+        // Construire l'URL à partir du domaine
+        let siteUrl = siteResponse.data.domain;
+        if (siteUrl && !siteUrl.startsWith('http')) {
+            siteUrl = `https://${siteUrl}`;
+        }
+        
+        selectedSiteInfo.value = {
+            id: parseInt(siteId),
+            name: siteResponse.data.name,
+            url: siteUrl
+        };
+        
+        console.log('🌐 Site info loaded:', selectedSiteInfo.value);
+        
     } catch (error) {
-        console.error('Error fetching site colors:', error);
+        console.error('Error fetching site data:', error);
         siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
+        selectedSiteInfo.value = null;
     }
 };
 
@@ -1685,6 +1781,7 @@ watch(
         } else {
             form.site_id = '';
             siteColors.value = { primary_color: '', secondary_color: '', accent_color: '' };
+            selectedSiteInfo.value = null;
             availableCategories.value = [];
             selectedCategoryValues.value = [];
             siteLanguages.value = [];
@@ -1692,6 +1789,38 @@ watch(
         }
     },
     { deep: true },
+);
+
+// Watcher pour mettre à jour automatiquement l'URL canonique quand le meta title change
+watch(
+    () => form.meta_title,
+    (newMetaTitle) => {
+        // Ne pas écraser une URL canonique définie manuellement par l'utilisateur
+        // Seulement si c'est vide ou si c'est l'ancienne URL générée automatiquement
+        if (!form.canonical_url || form.canonical_url === generateCanonicalUrl()) {
+            const newCanonicalUrl = generateCanonicalUrl();
+            if (newCanonicalUrl) {
+                form.canonical_url = newCanonicalUrl;
+                console.log('🔗 Canonical URL auto-generated:', newCanonicalUrl);
+            }
+        }
+    },
+    { immediate: false }
+);
+
+// Watcher pour régénérer l'URL canonique quand le site change (si pas d'URL canonique définie)
+watch(
+    () => selectedSiteInfo.value?.url,
+    () => {
+        if (form.meta_title && (!form.canonical_url || form.canonical_url === '')) {
+            const newCanonicalUrl = generateCanonicalUrl();
+            if (newCanonicalUrl) {
+                form.canonical_url = newCanonicalUrl;
+                console.log('🔗 Canonical URL auto-generated after site change:', newCanonicalUrl);
+            }
+        }
+    },
+    { immediate: false }
 );
 
 // Watch pour recharger les catégories quand la langue change
@@ -2342,6 +2471,15 @@ const initializeForEdit = async () => {
             // Charger les données du site
             await fetchSiteColors(parseInt(form.site_id));
             await fetchSiteLanguages(parseInt(form.site_id));
+            
+            // Générer l'URL canonique si elle est vide et qu'on a un meta title
+            if (!form.canonical_url && form.meta_title) {
+                const generatedUrl = generateCanonicalUrl();
+                if (generatedUrl) {
+                    form.canonical_url = generatedUrl;
+                    console.log('🔗 Canonical URL auto-generated during initialization:', generatedUrl);
+                }
+            }
         }
 
         // Initialiser la langue de l'article

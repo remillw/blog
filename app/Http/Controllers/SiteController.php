@@ -148,7 +148,21 @@ class SiteController extends Controller
      */
     public function show(string $id)
     {
-        //
+        $site = Site::where('id', $id)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
+        return response()->json([
+            'id' => $site->id,
+            'name' => $site->name,
+            'domain' => $site->domain,
+            'platform_type' => $site->platform_type,
+            'is_active' => $site->is_active,
+            'description' => $site->description,
+            'primary_color' => $site->primary_color,
+            'secondary_color' => $site->secondary_color,
+            'accent_color' => $site->accent_color,
+        ]);
     }
 
     /**
