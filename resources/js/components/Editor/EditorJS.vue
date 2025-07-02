@@ -492,10 +492,11 @@ class ButtonTool extends CustomTool {
 
     // Méthode pour appliquer les classes Tailwind basées sur le style du bouton
     applyTailwindClasses(button: HTMLElement) {
-        // Supprimer toutes les classes existantes
+        // Supprimer toutes les classes et styles existants
         button.className = '';
+        button.removeAttribute('style');
         
-        // Classes de base communes à tous les boutons
+        // Classes de base communes à tous les boutons avec votre style exact
         const baseClasses = [
             'px-4', 'py-2', 'font-black', 'inline-block', 'text-center', 'no-underline', 'cursor-pointer',
             'hover:-translate-y-1', 'hover:translate-x-1', 'hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,0.8)]',
@@ -534,6 +535,12 @@ class ButtonTool extends CustomTool {
         // Combiner toutes les classes et les appliquer
         const allClasses = [...baseClasses, ...styleClasses];
         button.className = allClasses.join(' ');
+        
+        // S'assurer qu'aucun style inline n'interfère
+        button.style.removeProperty('background-color');
+        button.style.removeProperty('color');
+        button.style.removeProperty('border');
+        button.style.removeProperty('border-color');
     }
 
 

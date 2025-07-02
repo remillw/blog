@@ -222,66 +222,46 @@ export function useEditorJSConverter() {
                     const rel = block.data.rel ? ` rel="${block.data.rel}"` : '';
                     const style = block.data.style || 'primary';
                     
-                    // Récupérer les couleurs du site depuis les données sauvegardées ou utiliser les valeurs par défaut
-                    const siteColors = block.data.siteColors || {
-                        primary: '#4E8D44',
-                        secondary: '#6b7280',
-                        accent: '#10b981'
-                    };
+                    // Classes de base communes à tous les boutons avec votre style exact
+                    const baseClasses = [
+                        'px-4', 'py-2', 'font-black', 'inline-block', 'text-center', 'no-underline', 'cursor-pointer',
+                        'hover:-translate-y-1', 'hover:translate-x-1', 'hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,0.8)]',
+                        'transition-all', 'duration-300', 'min-w-[160px]', 'rounded-lg'
+                    ];
                     
-                    let backgroundColor = '';
-                    let color = 'white';
-                    let borderColor = '';
+                    // Classes spécifiques selon le style
+                    let styleClasses: string[] = [];
                     
                     switch (style) {
                         case 'primary':
-                            backgroundColor = siteColors.primary;
-                            borderColor = siteColors.primary;
+                            styleClasses = ['bg-primary', 'text-white', 'border-2', 'border-primary'];
                             break;
                         case 'secondary':
-                            backgroundColor = siteColors.secondary;
-                            borderColor = siteColors.secondary;
+                            styleClasses = ['bg-secondary', 'text-white', 'border-2', 'border-secondary'];
+                            break;
+                        case 'accent':
+                            styleClasses = ['bg-accent', 'text-white', 'border-2', 'border-accent'];
                             break;
                         case 'success':
-                            backgroundColor = '#22c55e';
-                            borderColor = '#22c55e';
+                            styleClasses = ['bg-green-500', 'text-white', 'border-2', 'border-green-500'];
                             break;
                         case 'warning':
-                            backgroundColor = '#f59e0b';
-                            borderColor = '#f59e0b';
+                            styleClasses = ['bg-yellow-500', 'text-white', 'border-2', 'border-yellow-500'];
                             break;
                         case 'danger':
-                            backgroundColor = '#ef4444';
-                            borderColor = '#ef4444';
+                            styleClasses = ['bg-red-500', 'text-white', 'border-2', 'border-red-500'];
                             break;
                         case 'outline':
-                            backgroundColor = 'transparent';
-                            color = siteColors.primary;
-                            borderColor = siteColors.primary;
+                            styleClasses = ['bg-transparent', 'text-primary', 'border-2', 'border-primary', 'hover:bg-primary', 'hover:text-white'];
                             break;
                         default:
-                            backgroundColor = siteColors.primary;
-                            borderColor = siteColors.primary;
+                            styleClasses = ['bg-primary', 'text-white', 'border-2', 'border-primary'];
                     }
                     
-                    const inlineStyles = `
-                        display: inline-block;
-                        padding: 12px 24px;
-                        font-size: 16px;
-                        font-weight: 600;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        transition: all 0.3s ease;
-                        text-align: center;
-                        text-decoration: none;
-                        border: 2px solid ${borderColor};
-                        min-width: 160px;
-                        background-color: ${backgroundColor};
-                        color: ${color};
-                        margin: 8px 0;
-                    `.replace(/\s+/g, ' ').trim();
+                    // Combiner toutes les classes
+                    const allClasses = [...baseClasses, ...styleClasses].join(' ');
                     
-                    return `<a${link}${target}${rel} style="${inlineStyles}" class="cta-button cta-button--${style}">${block.data.text}</a>`;
+                    return `<a${link}${target}${rel} class="${allClasses}">${block.data.text}</a>`;
                 }
                 break;
 
