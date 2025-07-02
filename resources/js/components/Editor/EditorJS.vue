@@ -93,8 +93,6 @@ class ButtonTool extends CustomTool {
         buttonPreview.title = 'Cliquez pour éditer ce call-to-action';
 
         const button = document.createElement('a');
-        button.classList.add('button-tool__btn');
-        button.classList.add(`button-tool__btn--${this.data.style}`);
         button.textContent = this.data.text;
         button.href = this.data.link || '#';
         button.target = this.data.target;
@@ -102,8 +100,8 @@ class ButtonTool extends CustomTool {
             button.rel = this.data.rel;
         }
         
-        // Appliquer les couleurs inline selon le style
-        this.applyInlineColors(button);
+        // Appliquer les classes Tailwind selon le style
+        this.applyTailwindClasses(button);
         
         button.onclick = (e) => e.preventDefault(); // Empêcher la navigation en mode édition
 
@@ -203,8 +201,6 @@ class ButtonTool extends CustomTool {
         buttonPreview.classList.add('button-tool__preview');
         
         const button = document.createElement('a');
-        button.classList.add('button-tool__btn');
-        button.classList.add(`button-tool__btn--${this.data.style}`);
         button.textContent = this.data.text;
         button.href = this.data.link || '#';
         button.target = this.data.target;
@@ -213,8 +209,8 @@ class ButtonTool extends CustomTool {
         }
         button.onclick = (e) => e.preventDefault();
         
-        // Appliquer les couleurs inline aussi en mode édition
-        this.applyInlineColors(button);
+        // Appliquer les classes Tailwind aussi en mode édition
+        this.applyTailwindClasses(button);
 
         buttonPreview.appendChild(button);
 
@@ -303,7 +299,8 @@ class ButtonTool extends CustomTool {
         const options = [
             { value: 'primary', text: '🔥 Principal (Attention)', description: 'Bouton principal avec couleur site' },
             { value: 'secondary', text: '📋 Secondaire (Info)', description: 'Bouton neutre pour infos' },
-            { value: 'success', text: '✅ Succès (Action)', description: 'Vert pour actions positives' },
+            { value: 'accent', text: '💎 Accent (Action)', description: 'Couleur accent du site' },
+            { value: 'success', text: '✅ Succès (Validation)', description: 'Vert pour actions positives' },
             { value: 'warning', text: '⚠️ Attention (Promo)', description: 'Orange pour promotions' },
             { value: 'danger', text: '🚨 Urgent (Dernière chance)', description: 'Rouge pour urgence' },
             { value: 'outline', text: '⭕ Contour (Discret)', description: 'Bordure seule, plus discret' },
@@ -321,11 +318,9 @@ class ButtonTool extends CustomTool {
         });
 
         styleSelect.addEventListener('change', () => {
-            button.classList.remove(`button-tool__btn--${this.data.style}`);
             this.data.style = styleSelect.value;
-            button.classList.add(`button-tool__btn--${this.data.style}`);
-            // Réappliquer les couleurs inline avec le nouveau style
-            this.applyInlineColors(button);
+            // Réappliquer les classes Tailwind avec le nouveau style
+            this.applyTailwindClasses(button);
         });
 
         styleGroup.appendChild(styleLabel);
@@ -495,107 +490,52 @@ class ButtonTool extends CustomTool {
 
 
 
-    // Méthode pour appliquer les couleurs inline basées sur les couleurs du site
-    applyInlineColors(button: HTMLElement) {
-        // Récupérer les couleurs du site depuis les props Vue (via un event global ou data attribute)
-        const siteColors = this.getSiteColors();
+    // Méthode pour appliquer les classes Tailwind basées sur le style du bouton
+    applyTailwindClasses(button: HTMLElement) {
+        // Supprimer toutes les classes existantes
+        button.className = '';
         
-        let backgroundColor = '';
-        let color = 'white';
-        let borderColor = '';
+        // Classes de base communes à tous les boutons
+        const baseClasses = [
+            'px-4', 'py-2', 'font-black', 'inline-block', 'text-center', 'no-underline', 'cursor-pointer',
+            'hover:-translate-y-1', 'hover:translate-x-1', 'hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,0.8)]',
+            'transition-all', 'duration-300', 'min-w-[160px]', 'rounded-lg'
+        ];
+        
+        // Classes spécifiques selon le style
+        let styleClasses: string[] = [];
         
         switch (this.data.style) {
             case 'primary':
-                backgroundColor = siteColors.primary;
-                borderColor = siteColors.primary;
+                styleClasses = ['bg-primary', 'text-white', 'border-2', 'border-primary'];
                 break;
             case 'secondary':
-                backgroundColor = siteColors.secondary;
-                borderColor = siteColors.secondary;
+                styleClasses = ['bg-secondary', 'text-white', 'border-2', 'border-secondary'];
+                break;
+            case 'accent':
+                styleClasses = ['bg-accent', 'text-white', 'border-2', 'border-accent'];
                 break;
             case 'success':
-                backgroundColor = '#22c55e';
-                borderColor = '#22c55e';
+                styleClasses = ['bg-green-500', 'text-white', 'border-2', 'border-green-500'];
                 break;
             case 'warning':
-                backgroundColor = '#f59e0b';
-                borderColor = '#f59e0b';
+                styleClasses = ['bg-yellow-500', 'text-white', 'border-2', 'border-yellow-500'];
                 break;
             case 'danger':
-                backgroundColor = '#ef4444';
-                borderColor = '#ef4444';
+                styleClasses = ['bg-red-500', 'text-white', 'border-2', 'border-red-500'];
                 break;
             case 'outline':
-                backgroundColor = 'transparent';
-                color = siteColors.primary;
-                borderColor = siteColors.primary;
+                styleClasses = ['bg-transparent', 'text-primary', 'border-2', 'border-primary', 'hover:bg-primary', 'hover:text-white'];
                 break;
             default:
-                backgroundColor = siteColors.primary;
-                borderColor = siteColors.primary;
+                styleClasses = ['bg-primary', 'text-white', 'border-2', 'border-primary'];
         }
         
-        // Appliquer les styles inline
-        button.style.cssText = `
-            display: inline-block;
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: 600;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-            text-decoration: none;
-            border: 2px solid ${borderColor};
-            min-width: 160px;
-            background-color: ${backgroundColor};
-            color: ${color};
-        `;
-        
-        // Ajouter les effets hover via JavaScript
-        button.addEventListener('mouseenter', () => {
-            if (this.data.style === 'outline') {
-                button.style.backgroundColor = siteColors.primary;
-                button.style.color = 'white';
-            } else {
-                button.style.transform = 'translateY(-2px)';
-                button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-            }
-        });
-        
-        button.addEventListener('mouseleave', () => {
-            if (this.data.style === 'outline') {
-                button.style.backgroundColor = 'transparent';
-                button.style.color = siteColors.primary;
-            } else {
-                button.style.transform = 'translateY(0)';
-                button.style.boxShadow = 'none';
-            }
-        });
+        // Combiner toutes les classes et les appliquer
+        const allClasses = [...baseClasses, ...styleClasses];
+        button.className = allClasses.join(' ');
     }
-    
-    // Méthode pour récupérer les couleurs du site
-    getSiteColors() {
-        // Essayer de récupérer depuis un data attribute ou variable globale
-        const editorElement = document.querySelector('.codex-editor');
-        let siteColors = {
-            primary: '#4E8D44',
-            secondary: '#6b7280',
-            accent: '#10b981'
-        };
-        
-        if (editorElement) {
-            const primaryColor = editorElement.getAttribute('data-primary-color');
-            const secondaryColor = editorElement.getAttribute('data-secondary-color');
-            const accentColor = editorElement.getAttribute('data-accent-color');
-            
-            if (primaryColor) siteColors.primary = primaryColor;
-            if (secondaryColor) siteColors.secondary = secondaryColor;
-            if (accentColor) siteColors.accent = accentColor;
-        }
-        
-        return siteColors;
-    }
+
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     override save() {
@@ -605,7 +545,6 @@ class ButtonTool extends CustomTool {
             style: this.data.style,
             target: this.data.target,
             rel: this.data.rel,
-            siteColors: this.getSiteColors(), // Sauvegarder les couleurs aussi
         };
     }
 
@@ -2474,79 +2413,7 @@ class InlineLinkTool {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Styles dynamiques pour les boutons basés sur les couleurs du site - Version étendue */
-.button-tool__btn--primary {
-    background-color: v-bind('siteColors?.primary || "#4E8D44"');
-    color: white;
-    border-color: v-bind('siteColors?.primary || "#4E8D44"');
-}
-
-.button-tool__btn--primary:hover {
-    background-color: color-mix(in srgb, v-bind('siteColors?.primary || "#4E8D44"') 85%, black);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.button-tool__btn--secondary {
-    background-color: v-bind('siteColors?.secondary || "#6b7280"');
-    color: white;
-    border-color: v-bind('siteColors?.secondary || "#6b7280"');
-}
-
-.button-tool__btn--secondary:hover {
-    background-color: color-mix(in srgb, v-bind('siteColors?.secondary || "#6b7280"') 85%, black);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.button-tool__btn--success {
-    background-color: #22c55e;
-    color: white;
-    border-color: #22c55e;
-}
-
-.button-tool__btn--success:hover {
-    background-color: #16a34a;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
-}
-
-.button-tool__btn--warning {
-    background-color: #f59e0b;
-    color: white;
-    border-color: #f59e0b;
-}
-
-.button-tool__btn--warning:hover {
-    background-color: #d97706;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-}
-
-.button-tool__btn--danger {
-    background-color: #ef4444;
-    color: white;
-    border-color: #ef4444;
-}
-
-.button-tool__btn--danger:hover {
-    background-color: #dc2626;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-}
-
-.button-tool__btn--outline {
-    background-color: transparent;
-    color: v-bind('siteColors?.primary || "#4E8D44"');
-    border-color: v-bind('siteColors?.primary || "#4E8D44"');
-}
-
-.button-tool__btn--outline:hover {
-    background-color: v-bind('siteColors?.primary || "#4E8D44"');
-    color: white;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
+/* Styles pour les boutons CTA maintenant gérés via Tailwind classes */
 
 /* Animation pour l'apparition des boutons */
 @keyframes buttonAppear {
