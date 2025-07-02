@@ -890,6 +890,7 @@ const form = useForm({
     excerpt: '',
     content: '',
     content_html: '',
+    content_type: 'editorjs',
     cover_image: null as File | null,
     status: 'draft',
     scheduled_at: undefined as string | undefined,
@@ -1511,7 +1512,12 @@ watch(
             }
             form.meta_title = newArticle.meta_title;
             form.meta_description = newArticle.meta_description;
-            form.meta_keywords = newArticle.meta_keywords;
+            // Gérer meta_keywords : convertir array en string si nécessaire
+            if (Array.isArray(newArticle.meta_keywords)) {
+                form.meta_keywords = newArticle.meta_keywords.join(', ');
+            } else {
+                form.meta_keywords = newArticle.meta_keywords || '';
+            }
             form.canonical_url = newArticle.canonical_url;
             form.status = newArticle.status;
             form.scheduled_at = newArticle.scheduled_at || undefined;
@@ -1535,6 +1541,7 @@ watch(
             }
         } else {
             form.reset();
+            form.content_type = 'editorjs'; // Réinitialiser content_type
             selectedSiteValues.value = [];
             selectedCategoryValues.value = [];
             availableCategories.value = [];
@@ -1583,6 +1590,14 @@ const submit = () => {
         }
     }
 
+    // Convertir meta_keywords en array pour la validation backend
+    const originalMetaKeywords = form.meta_keywords;
+    if (typeof form.meta_keywords === 'string' && form.meta_keywords.trim()) {
+        (form as any).meta_keywords = form.meta_keywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
+    } else {
+        (form as any).meta_keywords = [];
+    }
+
     console.log('📤 Final form data being sent:', {
         title: form.title,
         content: form.content ? 'has content' : 'empty',
@@ -1603,6 +1618,8 @@ const submit = () => {
             onSuccess: () => emit('close'),
             onError: (errors) => {
                 console.error('❌ Form submission errors:', errors);
+                // Restaurer meta_keywords en string après erreur
+                form.meta_keywords = originalMetaKeywords;
                 Object.keys(errors).forEach(key => {
                     showNotification('error', `Erreur ${key}`, errors[key]);
                 });
@@ -1613,6 +1630,8 @@ const submit = () => {
             onSuccess: () => emit('close'),
             onError: (errors) => {
                 console.error('❌ Form submission errors:', errors);
+                // Restaurer meta_keywords en string après erreur
+                form.meta_keywords = originalMetaKeywords;
                 Object.keys(errors).forEach(key => {
                     showNotification('error', `Erreur ${key}`, errors[key]);
                 });
@@ -2247,14 +2266,22 @@ const initializeForEdit = async () => {
         form.excerpt = props.article.excerpt || '';
         form.meta_title = props.article.meta_title || '';
         form.meta_description = props.article.meta_description || '';
-        form.meta_keywords = Array.isArray(props.article.meta_keywords) 
-            ? props.article.meta_keywords.join(', ') 
-            : props.article.meta_keywords || '';
+        
+        // Gérer meta_keywords : convertir array en string si nécessaire
+        if (Array.isArray(props.article.meta_keywords)) {
+            form.meta_keywords = props.article.meta_keywords.join(', ');
+        } else {
+            form.meta_keywords = props.article.meta_keywords || '';
+        }
+        
         form.canonical_url = props.article.canonical_url || '';
         form.author_name = props.article.author_name || '';
         form.author_bio = props.article.author_bio || '';
         form.status = props.article.status || 'draft';
         form.site_id = props.article.site_id?.toString() || '';
+        
+        // S'assurer que content_type est correctement défini
+        form.content_type = 'editorjs';
 
         // Gérer les dates
         if (props.article.scheduled_at) {
