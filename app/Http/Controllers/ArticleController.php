@@ -113,7 +113,7 @@ class ArticleController extends Controller
             'cover_image' => 'nullable|string', // Maintenant c'est un chemin vers le fichier déjà uploadé
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string',
-            'meta_keywords' => 'nullable|string',
+            'meta_keywords' => 'nullable|string|array', // Accepter à la fois string et array
             'canonical_url' => 'nullable|url',
             'status' => 'required|in:draft,published,scheduled',
             'published_at' => 'nullable|date',
@@ -131,6 +131,11 @@ class ArticleController extends Controller
         $site = Site::where('id', $validated['site_id'])
             ->where('user_id', Auth::id())
             ->firstOrFail();
+
+        // Normaliser meta_keywords (convertir en string si c'est un array)
+        if (isset($validated['meta_keywords']) && is_array($validated['meta_keywords'])) {
+            $validated['meta_keywords'] = implode(', ', array_filter($validated['meta_keywords']));
+        }
 
         // Générer un slug unique
         $slug = Str::slug($validated['title']);
@@ -248,7 +253,7 @@ class ArticleController extends Controller
             'cover_image' => 'nullable|string', // Maintenant c'est un chemin vers le fichier déjà uploadé
             'meta_title' => 'nullable|string|max:255',
             'meta_description' => 'nullable|string',
-            'meta_keywords' => 'nullable|array',
+            'meta_keywords' => 'nullable|string|array', // Accepter à la fois string et array
             'canonical_url' => 'nullable|url',
             'status' => 'required|in:draft,published,scheduled',
             'published_at' => 'nullable|date',
@@ -273,6 +278,11 @@ class ArticleController extends Controller
         $site = Site::where('id', $validated['site_id'])
             ->where('user_id', Auth::id())
             ->firstOrFail();
+
+        // Normaliser meta_keywords (convertir en string si c'est un array)
+        if (isset($validated['meta_keywords']) && is_array($validated['meta_keywords'])) {
+            $validated['meta_keywords'] = implode(', ', array_filter($validated['meta_keywords']));
+        }
 
         // Gérer le contenu selon le type
         $contentData = [];

@@ -1465,34 +1465,18 @@ const translateToMultipleLanguages = async () => {
         for (const targetLanguage of selectedTranslationLanguages.value) {
             console.log('🌍 Translating to:', targetLanguage);
 
-            // Obtenir le token CSRF de manière robuste
-            const csrfToken = getCsrfToken();
-            if (!csrfToken) {
-                throw new Error('Token CSRF introuvable pour la traduction. Veuillez rafraîchir la page.');
-            }
-
-            const response = await axios.post(
-                '/articles/translate',
-                {
-                    title: form.title,
-                    excerpt: form.excerpt,
-                    content_html: form.content_html,
-                    meta_title: form.meta_title,
-                    meta_description: form.meta_description,
-                    meta_keywords: form.meta_keywords,
-                    author_bio: form.author_bio,
-                    target_language: targetLanguage,
-                    source_language: 'fr',
-                },
-                {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': csrfToken,
-                    },
-                },
-            );
+            // Utiliser axios avec la configuration globale (token CSRF automatiquement inclus)
+            const response = await axios.post('/articles/translate', {
+                title: form.title,
+                excerpt: form.excerpt,
+                content_html: form.content_html,
+                meta_title: form.meta_title,
+                meta_description: form.meta_description,
+                meta_keywords: form.meta_keywords,
+                author_bio: form.author_bio,
+                target_language: targetLanguage,
+                source_language: 'fr',
+            });
 
             const translatedData = response.data;
             translationResults.value.push({
@@ -1686,13 +1670,8 @@ const submit = () => {
         }
     }
 
-    // Convertir meta_keywords en array pour la validation backend
-    const originalMetaKeywords = form.meta_keywords;
-    if (typeof form.meta_keywords === 'string' && form.meta_keywords.trim()) {
-        (form as any).meta_keywords = form.meta_keywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
-    } else {
-        (form as any).meta_keywords = [];
-    }
+    // Garder meta_keywords en string (le backend s'occupe de la conversion si nécessaire)
+    // Plus de conversion nécessaire côté frontend
 
     console.log('📤 Final form data being sent:', {
         title: form.title,
@@ -1714,8 +1693,6 @@ const submit = () => {
             onSuccess: () => emit('close'),
             onError: (errors) => {
                 console.error('❌ Form submission errors:', errors);
-                // Restaurer meta_keywords en string après erreur
-                form.meta_keywords = originalMetaKeywords;
                 Object.keys(errors).forEach(key => {
                     showNotification('error', `Erreur ${key}`, errors[key]);
                 });
@@ -1726,8 +1703,6 @@ const submit = () => {
             onSuccess: () => emit('close'),
             onError: (errors) => {
                 console.error('❌ Form submission errors:', errors);
-                // Restaurer meta_keywords en string après erreur
-                form.meta_keywords = originalMetaKeywords;
                 Object.keys(errors).forEach(key => {
                     showNotification('error', `Erreur ${key}`, errors[key]);
                 });
@@ -1876,46 +1851,23 @@ function showNotification(type: 'success' | 'error', title: string, message: str
 const getCsrfToken = (): string => {
     // Méthode 1: Meta tag (principale)
     const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    console.log('🔍 Meta tag token:', metaToken?.substring(0, 10) + '...');
     if (metaToken) {
+        console.log('✅ Found CSRF token from meta tag');
         return metaToken;
     }
     
-    // Méthode 2: Inertia page props si disponible
-    try {
-        const inertiaElement = document.getElementById('app');
-        const pageData = inertiaElement?.getAttribute('data-page');
-        if (pageData) {
-            const parsed = JSON.parse(pageData);
-            const token = parsed.props?.csrf_token || parsed.props?._token;
-            console.log('🔍 Inertia token:', token?.substring(0, 10) + '...');
-            if (token) {
-                return token;
-            }
-        }
-    } catch (e) {
-        console.warn('Could not get token from Inertia props');
-    }
-    
-    // Méthode 3: Depuis un form hidden input (fallback)
-    const hiddenInput = document.querySelector('input[name="_token"]') as HTMLInputElement;
-    if (hiddenInput?.value) {
-        console.log('🔍 Hidden input token:', hiddenInput.value.substring(0, 10) + '...');
-        return hiddenInput.value;
-    }
-    
-    // Méthode 4: Depuis les cookies Laravel
+    // Méthode 2: Depuis les cookies Laravel (XSRF-TOKEN)
     const cookies = document.cookie.split(';');
     for (let cookie of cookies) {
         const [name, value] = cookie.trim().split('=');
         if (name === 'XSRF-TOKEN') {
             const decoded = decodeURIComponent(value);
-            console.log('🔍 Cookie token:', decoded.substring(0, 10) + '...');
+            console.log('✅ Found CSRF token from cookie');
             return decoded;
         }
     }
     
-    console.error('❌ CSRF token not found in any location');
+    console.error('❌ CSRF token not found - page may need refresh');
     return '';
 };
 
@@ -1977,22 +1929,8 @@ const generateMultiLanguageArticle = async () => {
             }, 300); // Moins fréquent
 
             try {
-                // Obtenir le token CSRF de manière robuste
-                const csrfToken = getCsrfToken();
-                if (!csrfToken) {
-                    throw new Error('Token CSRF introuvable. Veuillez rafraîchir la page.');
-                }
-
-                console.log('🔑 Using CSRF token:', csrfToken.substring(0, 10) + '...');
-
-                const response = await axios.post('/articles/generate-with-ai', requestData, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': csrfToken,
-                    },
-                });
+                // Utiliser axios avec la configuration globale (token CSRF automatiquement inclus)
+                const response = await axios.post('/articles/generate-with-ai', requestData);
 
                 // Arrêter l'animation de progression
                 clearInterval(progressInterval);
@@ -2065,9 +2003,13 @@ const generateMultiLanguageArticle = async () => {
 
         let errorMessage = 'Erreur lors de la génération des articles';
         
-        // Gestion spécifique de l'erreur CSRF
-        if (error.response?.status === 419 || error.message?.includes('CSRF') || error.message?.includes('csrf')) {
-            errorMessage = 'Erreur de sécurité (CSRF). Veuillez rafraîchir la page et réessayer.';
+        // Gestion spécifique de l'erreur CSRF 419
+        if (error.response?.status === 419) {
+            errorMessage = 'Session expirée. Veuillez rafraîchir la page et réessayer.';
+            // Automatiquement rafraîchir la page après 3 secondes
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
         } else if (error.response?.data?.message) {
             errorMessage = error.response.data.message;
         } else if (error.response?.data?.error) {
