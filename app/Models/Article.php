@@ -63,6 +63,42 @@ class Article extends Model
         'webhook_data' => 'array',
     ];
 
+    /**
+     * Mutateur pour meta_keywords - s'assurer qu'il est toujours stocké comme array
+     */
+    public function setMetaKeywordsAttribute($value)
+    {
+        if (is_string($value)) {
+            // Convertir string en array (séparer par virgules et nettoyer)
+            $this->attributes['meta_keywords'] = json_encode(
+                array_filter(array_map('trim', explode(',', $value)))
+            );
+        } elseif (is_array($value)) {
+            // Nettoyer l'array et le stocker
+            $this->attributes['meta_keywords'] = json_encode(array_filter($value));
+        } else {
+            // Valeur null ou autre
+            $this->attributes['meta_keywords'] = null;
+        }
+    }
+
+    /**
+     * Accesseur pour meta_keywords - s'assurer qu'il retourne toujours un array
+     */
+    public function getMetaKeywordsAttribute($value)
+    {
+        if (is_null($value)) {
+            return [];
+        }
+        
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        
+        return is_array($value) ? $value : [];
+    }
+
     protected static function boot()
     {
         parent::boot();

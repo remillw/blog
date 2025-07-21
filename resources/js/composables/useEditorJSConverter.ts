@@ -46,7 +46,17 @@ export function useEditorJSConverter() {
         },
         image: (data: any) => {
             const caption = data.caption ? `<figcaption>${data.caption}</figcaption>` : '';
-            return `<figure><img src="${data.file.url}" alt="${data.caption || ''}">${caption}</figure>`;
+            const alt = data.caption || '';
+            const img = `<img src="${data.file.url}" alt="${alt}">`;
+            
+            // Vérifier s'il y a un lien sur l'image
+            if (data.link && data.link.trim() !== '') {
+                const target = data.linkTarget === '_blank' ? ' target="_blank" rel="noopener noreferrer"' : '';
+                const linkedImg = `<a href="${data.link}"${target}>${img}</a>`;
+                return `<figure>${linkedImg}${caption}</figure>`;
+            } else {
+                return `<figure>${img}${caption}</figure>`;
+            }
         },
         embed: (data: any) => {
             return `<div class="embed"><iframe src="${data.embed}" width="${data.width}" height="${data.height}"></iframe></div>`;
@@ -170,7 +180,16 @@ export function useEditorJSConverter() {
                 if (block.data.file && block.data.file.url) {
                     const caption = block.data.caption ? `<figcaption>${block.data.caption}</figcaption>` : '';
                     const alt = block.data.caption || '';
-                    return `<figure><img src="${block.data.file.url}" alt="${alt}">${caption}</figure>`;
+                    const img = `<img src="${block.data.file.url}" alt="${alt}">`;
+                    
+                    // Vérifier s'il y a un lien sur l'image
+                    if (block.data.link && block.data.link.trim() !== '') {
+                        const target = block.data.linkTarget === '_blank' ? ' target="_blank" rel="noopener noreferrer"' : '';
+                        const linkedImg = `<a href="${block.data.link}"${target}>${img}</a>`;
+                        return `<figure>${linkedImg}${caption}</figure>`;
+                    } else {
+                        return `<figure>${img}${caption}</figure>`;
+                    }
                 }
                 break;
 

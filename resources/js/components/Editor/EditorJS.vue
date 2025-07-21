@@ -931,18 +931,28 @@ class CustomImageTool extends ImageTool {
 
     // Méthode save personnalisée pour inclure les données de lien
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    override save(blockContent: any) {
+    override save(blockContent?: any) {
+        // Appeler la méthode save parent d'abord
         const originalData = super.save(blockContent);
         
-        // Récupérer les données de lien depuis l'interface
-        const wrapper = blockContent;
+        // Récupérer les données de lien depuis le wrapper (this.wrapper)
+        const wrapper = this.wrapper || blockContent;
+        if (!wrapper) {
+            return originalData;
+        }
+        
         const linkElement = wrapper.querySelector('a[href]');
         
-        return {
+        // Ajouter les données de lien aux données originales
+        const enhancedData = {
             ...originalData,
-            link: linkElement ? linkElement.href : '',
-            linkTarget: linkElement ? linkElement.target || '_self' : '_self'
+            link: linkElement ? linkElement.href : this.data.link || '',
+            linkTarget: linkElement ? linkElement.target || '_self' : this.data.linkTarget || '_self'
         };
+        
+        console.log('💾 CustomImageTool save() called with data:', enhancedData);
+        
+        return enhancedData;
     }
 
     // Méthode render personnalisée pour appliquer le lien s'il existe
