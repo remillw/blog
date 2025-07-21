@@ -132,9 +132,17 @@ class ArticleController extends Controller
             ->where('user_id', Auth::id())
             ->firstOrFail();
 
-        // Normaliser meta_keywords (convertir en string si c'est un array)
-        if (isset($validated['meta_keywords']) && is_array($validated['meta_keywords'])) {
-            $validated['meta_keywords'] = implode(', ', array_filter($validated['meta_keywords']));
+        // Normaliser meta_keywords (convertir string en array si nécessaire)
+        if (isset($validated['meta_keywords'])) {
+            if (is_string($validated['meta_keywords'])) {
+                // Convertir string en array (séparer par virgules et nettoyer)
+                $validated['meta_keywords'] = array_filter(
+                    array_map('trim', explode(',', $validated['meta_keywords']))
+                );
+            } elseif (is_array($validated['meta_keywords'])) {
+                // Nettoyer l'array existant
+                $validated['meta_keywords'] = array_filter($validated['meta_keywords']);
+            }
         }
 
         // Générer un slug unique
@@ -279,9 +287,17 @@ class ArticleController extends Controller
             ->where('user_id', Auth::id())
             ->firstOrFail();
 
-        // Normaliser meta_keywords (convertir en string si c'est un array)
-        if (isset($validated['meta_keywords']) && is_array($validated['meta_keywords'])) {
-            $validated['meta_keywords'] = implode(', ', array_filter($validated['meta_keywords']));
+        // Normaliser meta_keywords (convertir string en array si nécessaire)
+        if (isset($validated['meta_keywords'])) {
+            if (is_string($validated['meta_keywords'])) {
+                // Convertir string en array (séparer par virgules et nettoyer)
+                $validated['meta_keywords'] = array_filter(
+                    array_map('trim', explode(',', $validated['meta_keywords']))
+                );
+            } elseif (is_array($validated['meta_keywords'])) {
+                // Nettoyer l'array existant
+                $validated['meta_keywords'] = array_filter($validated['meta_keywords']);
+            }
         }
 
         // Gérer le contenu selon le type

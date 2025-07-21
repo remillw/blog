@@ -593,8 +593,11 @@
                             v-model="form.meta_keywords"
                             type="text"
                             :disabled="form.processing"
-                            placeholder="Separate keywords with commas"
+                            placeholder="Séparez les mots-clés par des virgules : SEO, blog, marketing..."
                         />
+                        <p class="text-sm text-gray-500">
+                            💡 Séparez chaque mot-clé par une virgule. Exemple : "référencement, blog, marketing digital"
+                        </p>
                         <InputError :message="form.errors.meta_keywords" />
                     </div>
 
@@ -1631,7 +1634,7 @@ watch(
     { immediate: true },
 );
 
-const submit = () => {
+const submit = async () => {
     console.log('🚀 Submit called');
     console.log('📝 form.content:', form.content ? form.content.substring(0, 200) + '...' : 'empty');
     console.log('🌐 form.content_html BEFORE conversion:', form.content_html ? form.content_html.substring(0, 200) + '...' : 'empty');
@@ -1670,9 +1673,6 @@ const submit = () => {
         }
     }
 
-    // Garder meta_keywords en string (le backend s'occupe de la conversion si nécessaire)
-    // Plus de conversion nécessaire côté frontend
-
     console.log('📤 Final form data being sent:', {
         title: form.title,
         content: form.content ? 'has content' : 'empty',
@@ -1687,27 +1687,54 @@ const submit = () => {
         console.log('🖼️ Using uploaded image path:', (form as any).cover_image_path);
     }
 
-    // Utiliser la méthode normale Inertia.js (l'image est déjà uploadée)
-    if (isEditing.value && props.article && props.article.id) {
-        form.put(articleRoutes.update(props.article.id), {
-            onSuccess: () => emit('close'),
-            onError: (errors) => {
-                console.error('❌ Form submission errors:', errors);
-                Object.keys(errors).forEach(key => {
-                    showNotification('error', `Erreur ${key}`, errors[key]);
-                });
-            }
-        });
-    } else {
-        form.post(articleRoutes.store(), {
-            onSuccess: () => emit('close'),
-            onError: (errors) => {
-                console.error('❌ Form submission errors:', errors);
-                Object.keys(errors).forEach(key => {
-                    showNotification('error', `Erreur ${key}`, errors[key]);
-                });
-            }
-        });
+    try {
+        // Utiliser la méthode normale Inertia.js avec gestion d'erreur améliorée
+        if (isEditing.value && props.article && props.article.id) {
+            form.put(articleRoutes.update(props.article.id), {
+                onSuccess: () => {
+                    console.log('✅ Article updated successfully');
+                    emit('close');
+                },
+                onError: (errors) => {
+                    console.error('❌ Form submission errors:', errors);
+                    if (errors.csrf_token || errors.message?.includes('CSRF') || errors.message?.includes('token')) {
+                        showNotification('error', 'Erreur de sécurité', 'Votre session a expiré. La page va être rechargée automatiquement.');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        Object.keys(errors).forEach(key => {
+                            const message = Array.isArray(errors[key]) ? errors[key][0] : errors[key];
+                            showNotification('error', `Erreur ${key}`, message);
+                        });
+                    }
+                }
+            });
+        } else {
+            form.post(articleRoutes.store(), {
+                onSuccess: () => {
+                    console.log('✅ Article created successfully');
+                    emit('close');
+                },
+                onError: (errors) => {
+                    console.error('❌ Form submission errors:', errors);
+                    if (errors.csrf_token || errors.message?.includes('CSRF') || errors.message?.includes('token')) {
+                        showNotification('error', 'Erreur de sécurité', 'Votre session a expiré. La page va être rechargée automatiquement.');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        Object.keys(errors).forEach(key => {
+                            const message = Array.isArray(errors[key]) ? errors[key][0] : errors[key];
+                            showNotification('error', `Erreur ${key}`, message);
+                        });
+                    }
+                }
+            });
+        }
+    } catch (error) {
+        console.error('❌ Unexpected error during submission:', error);
+        showNotification('error', 'Erreur inattendue', 'Une erreur inattendue s\'est produite. Veuillez réessayer.');
     }
 };
 

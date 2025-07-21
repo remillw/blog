@@ -566,25 +566,22 @@ class ButtonTool extends CustomTool {
     }
 }
 
-// Plugin d'image personnalisé avec contrôle de largeur
+// Plugin d'image personnalisé avec contrôle de largeur et lien
 class CustomImageTool extends ImageTool {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: any;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     constructor(params: any) {
         super(params);
+        this.data = {
+            ...params.data,
+            link: params.data?.link || '',
+            linkTarget: params.data?.linkTarget || '_self'
+        };
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    override render() {
-        const wrapper = super.render();
 
-        // Ajouter le contrôle de largeur personnalisé
-        this.addCustomWidthControl(wrapper);
-
-        // Ajouter un bouton pour afficher/masquer le contrôle
-        this.addToggleButton(wrapper);
-
-        return wrapper;
-    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     addCustomWidthControl(wrapper: any) {
@@ -632,6 +629,68 @@ class CustomImageTool extends ImageTool {
             font-weight: 500;
         `;
 
+        // Créer le champ de lien pour l'image
+        const linkLabel = document.createElement('label');
+        linkLabel.textContent = 'Lien sur l\'image (optionnel):';
+        linkLabel.style.cssText = `
+            display: block;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        `;
+
+        const linkInput = document.createElement('input');
+        linkInput.type = 'url';
+        linkInput.placeholder = "https://exemple.com ou /page-interne";
+        linkInput.style.cssText = `
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+            margin-bottom: 8px;
+        `;
+
+        // Créer le checkbox pour ouvrir dans un nouvel onglet
+        const newTabContainer = document.createElement('div');
+        newTabContainer.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        `;
+
+        const newTabCheckbox = document.createElement('input');
+        newTabCheckbox.type = 'checkbox';
+        newTabCheckbox.id = 'imageNewTab';
+        newTabCheckbox.style.cssText = `
+            margin: 0;
+        `;
+
+        const newTabLabel = document.createElement('label');
+        newTabLabel.textContent = 'Ouvrir le lien dans un nouvel onglet';
+        newTabLabel.htmlFor = 'imageNewTab';
+        newTabLabel.style.cssText = `
+            font-size: 13px;
+            color: #6b7280;
+            cursor: pointer;
+        `;
+
+        newTabContainer.appendChild(newTabCheckbox);
+        newTabContainer.appendChild(newTabLabel);
+
+        // Récupérer les valeurs existantes de l'image si elles existent
+        const imageElement = wrapper.querySelector('img');
+        const imageWrapper = wrapper.querySelector('a');
+
+        if (imageWrapper && imageWrapper.href) {
+            linkInput.value = imageWrapper.href;
+            newTabCheckbox.checked = imageWrapper.target === '_blank';
+        }
+
         // Créer le champ alt text
         const altLabel = document.createElement('label');
         altLabel.textContent = 'Texte alternatif (Alt):';
@@ -657,7 +716,6 @@ class CustomImageTool extends ImageTool {
         `;
 
         // Récupérer la valeur alt existante si elle existe
-        const imageElement = wrapper.querySelector('img');
         if (imageElement && imageElement.alt) {
             altInput.value = imageElement.alt;
         }
@@ -687,6 +745,31 @@ class CustomImageTool extends ImageTool {
             }
         });
 
+        // Gestionnaire d'événement pour le champ de lien
+        linkInput.addEventListener('input', (e) => {
+            const linkValue = (e.target as HTMLInputElement).value.trim();
+            this.data.link = linkValue;
+            this.updateImageLink(wrapper, linkValue, newTabCheckbox.checked);
+            
+            // Détecter automatiquement les liens externes
+            if (linkValue && (linkValue.startsWith('http://') || linkValue.startsWith('https://'))) {
+                newTabCheckbox.checked = true;
+                this.data.linkTarget = '_blank';
+                this.updateImageLink(wrapper, linkValue, true);
+            } else {
+                this.data.linkTarget = '_self';
+            }
+        });
+
+        // Gestionnaire d'événement pour le checkbox nouvel onglet
+        newTabCheckbox.addEventListener('change', () => {
+            const linkValue = linkInput.value.trim();
+            this.data.linkTarget = newTabCheckbox.checked ? '_blank' : '_self';
+            if (linkValue) {
+                this.updateImageLink(wrapper, linkValue, newTabCheckbox.checked);
+            }
+        });
+
         // Gestionnaire d'événement pour le champ alt
         altInput.addEventListener('input', (e) => {
             const altValue = (e.target as HTMLInputElement).value;
@@ -696,15 +779,17 @@ class CustomImageTool extends ImageTool {
             }
         });
 
-        // Focus/blur styles pour le champ alt
-        altInput.addEventListener('focus', () => {
-            altInput.style.borderColor = '#3b82f6';
-            altInput.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-        });
+        // Focus/blur styles pour les champs
+        [linkInput, altInput].forEach(input => {
+            input.addEventListener('focus', () => {
+                input.style.borderColor = '#3b82f6';
+                input.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+            });
 
-        altInput.addEventListener('blur', () => {
-            altInput.style.borderColor = '#d1d5db';
-            altInput.style.boxShadow = 'none';
+            input.addEventListener('blur', () => {
+                input.style.borderColor = '#d1d5db';
+                input.style.boxShadow = 'none';
+            });
         });
 
         // Assembler le contrôle
@@ -720,6 +805,9 @@ class CustomImageTool extends ImageTool {
 
         widthControl.appendChild(label);
         widthControl.appendChild(sliderContainer);
+        widthControl.appendChild(linkLabel);
+        widthControl.appendChild(linkInput);
+        widthControl.appendChild(newTabContainer);
         widthControl.appendChild(altLabel);
         widthControl.appendChild(altInput);
 
@@ -785,6 +873,97 @@ class CustomImageTool extends ImageTool {
         if (control) {
             control.style.display = control.style.display === 'none' ? 'block' : 'none';
         }
+    }
+
+    // Méthode pour mettre à jour le lien de l'image
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateImageLink(wrapper: any, linkUrl: string, openInNewTab: boolean) {
+        const imageElement = wrapper.querySelector('img');
+        if (!imageElement) return;
+
+        // Supprimer le lien existant s'il y en a un
+        const existingLink = wrapper.querySelector('a[href]');
+        if (existingLink && existingLink.contains(imageElement)) {
+            const parent = existingLink.parentNode;
+            if (parent) {
+                parent.insertBefore(imageElement, existingLink);
+                parent.removeChild(existingLink);
+            }
+        }
+
+        // Ajouter un nouveau lien si une URL est fournie
+        if (linkUrl && linkUrl.trim() !== '') {
+            const link = document.createElement('a');
+            link.href = linkUrl.trim();
+            
+            if (openInNewTab) {
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+            }
+            
+            // Styles pour le lien image
+            link.style.cssText = `
+                display: inline-block;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            `;
+            
+            // Effet hover pour le lien image
+            link.addEventListener('mouseenter', () => {
+                imageElement.style.transform = 'scale(1.02)';
+                imageElement.style.filter = 'brightness(1.1)';
+                imageElement.style.transition = 'all 0.2s ease';
+            });
+            
+            link.addEventListener('mouseleave', () => {
+                imageElement.style.transform = 'scale(1)';
+                imageElement.style.filter = 'brightness(1)';
+            });
+
+            // Entourer l'image avec le lien
+            const parent = imageElement.parentNode;
+            if (parent) {
+                parent.insertBefore(link, imageElement);
+                link.appendChild(imageElement);
+            }
+        }
+    }
+
+    // Méthode save personnalisée pour inclure les données de lien
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    override save(blockContent: any) {
+        const originalData = super.save(blockContent);
+        
+        // Récupérer les données de lien depuis l'interface
+        const wrapper = blockContent;
+        const linkElement = wrapper.querySelector('a[href]');
+        
+        return {
+            ...originalData,
+            link: linkElement ? linkElement.href : '',
+            linkTarget: linkElement ? linkElement.target || '_self' : '_self'
+        };
+    }
+
+    // Méthode render personnalisée pour appliquer le lien s'il existe
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    override render() {
+        const wrapper = super.render();
+
+        // Ajouter le contrôle de largeur personnalisé
+        this.addCustomWidthControl(wrapper);
+
+        // Ajouter un bouton pour afficher/masquer le contrôle
+        this.addToggleButton(wrapper);
+
+        // Appliquer le lien existant s'il y en a un
+        setTimeout(() => {
+            if (this.data.link && this.data.link.trim() !== '') {
+                this.updateImageLink(wrapper, this.data.link, this.data.linkTarget === '_blank');
+            }
+        }, 100);
+
+        return wrapper;
     }
 }
 
@@ -3223,6 +3402,66 @@ class InlineLinkTool {
     background: #16a34a !important;
     transform: translateY(-1px) !important;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Styles pour les images avec liens */
+.ce-block__content a img {
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}
+
+.ce-block__content a img:hover {
+    transform: scale(1.02) !important;
+    filter: brightness(1.1) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.ce-block__content a {
+    display: inline-block !important;
+    text-decoration: none !important;
+    border: none !important;
+}
+
+/* Indicateur visuel pour les images cliquables */
+.ce-block__content a img::after {
+    content: '🔗' !important;
+    position: absolute !important;
+    top: 8px !important;
+    right: 8px !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    color: white !important;
+    padding: 4px 6px !important;
+    border-radius: 4px !important;
+    font-size: 12px !important;
+    opacity: 0 !important;
+    transition: opacity 0.2s ease !important;
+    pointer-events: none !important;
+}
+
+.ce-block__content a:hover img::after {
+    opacity: 1 !important;
+}
+
+/* Styles pour le contrôle d'image étendu */
+.image-width-control {
+    border: 1px solid #e2e8f0 !important;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%) !important;
+}
+
+.image-width-control label {
+    color: #1f2937 !important;
+    font-weight: 600 !important;
+}
+
+.image-width-control input[type="url"] {
+    background: white !important;
+    border: 1px solid #d1d5db !important;
+}
+
+.image-width-control input[type="url"]:focus {
+    border-color: #3b82f6 !important;
+    ring: 2px !important;
+    ring-color: rgba(59, 130, 246, 0.2) !important;
 }
 
 /* Styles pour le compteur de mots */
